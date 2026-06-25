@@ -1,0 +1,93 @@
+# Self-contained deployment for the Flue triage app. Lives in its own namespace
+# (flue-triage) so it cannot touch the existing `agents` app on the cluster.
+#
+# Architecture note: this is a single long-running Flue server. The Jira channel
+# webhook (/channels/jira/webhook) dispatches to an in-process agent — there is
+# no separate receiver/Job model here.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: flue-triage
+---
+# Bedrock access via IRSA, reusing the cluster's existing IAM role.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flue-triage
+  namespace: flue-triage
+  annotations:
+    # IAM role (IRSA) granting Bedrock InvokeModel. Replace with your own.
+    eks.amazonaws.com/role-arn: arn:aws:iam::<AWS_ACCOUNT_ID>:role/<BEDROCK_ROLE_NAME>
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flue-triage
+  namespace: flue-triage
+  labels:
+    app: flue-triage
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flue-triage
+  template:
+    metadata:
+      labels:
+        app: flue-triage
+    spec:
+      serviceAccountName: flue-triage
+      containers:
+        - name: flue-triage
+          image: <YOUR_REGISTRY>/flue-triage:v1
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - secretRef:
+                name: flue-triage-secrets
+          env:
+            - name: PORT
+              value: "8080"
+            - name: AWS_REGION
+              value: "us-west-2"
+            - name: JIRA_BASE_URL
+              value: "https://your-org.atlassian.net"
+            - name: JIRA_EMAIL
+              value: "bot@your-org.com"
+            - name: GITLAB_BASE_URL
+              value: "https://gitlab.com/api/v4"
+          # TCP probe: Flue's server has no GET route at `/` (returns 404), so an
+          # httpGet probe would never pass. Port-open is the correct readiness
+          # signal for this webhook server.
+          readinessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+# Internet-facing NLB locked to Jira's source range via the prefix-list
+# (matches the existing agent-receiver exposure). The AWS Load Balancer
+# Controller provisions the NLB from these annotations.
+apiVersion: v1
+kind: Service
+metadata:
+  name: flue-triage
+  namespace: flue-triage
+  labels:
+    app: flue-triage
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: external
+    service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: instance
+    service.beta.kubernetes.io/aws-load-balancer-manage-backend-security-group-rules: "true"
+    # Restrict inbound to the same source range as the existing app (Jira/VPC).
+    service.beta.kubernetes.io/aws-load-balancer-security-group-prefix-lists: pl-82a045eb
+spec:
+  type: LoadBalancer
+  loadBalancerClass: service.k8s.aws/nlb
+  selector:
+    app: flue-triage
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
