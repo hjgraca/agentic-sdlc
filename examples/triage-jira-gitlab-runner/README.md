@@ -29,6 +29,38 @@ Jira automation "Send web request"
 The issue key arrives as a CI variable (`$ISSUE_KEY`); `flue run` is the entry
 point. No webhook server, no load balancer, no Kubernetes.
 
+```mermaid
+flowchart LR
+    Jira["Jira<br/>(new/updated ticket)"]
+    Trigger["GitLab pipeline<br/>trigger API"]
+    Queue["GitLab<br/>queues pipeline"]
+    SkillsRepo["Skills repo<br/>(skills.sh, own release cycle)"]
+
+    subgraph runner["GitLab runner (one-shot job)"]
+        Before["before_script<br/>npm ci · skills add -a universal<br/>(if SKILLS_REPO) → SKILLS_DIR"]
+        Run["flue run jira-triage<br/>--input ISSUE_KEY"]
+        Agent["jira-triage agent<br/>(model + sandbox + tools)"]
+        CWD[("cwd / SKILLS_DIR<br/>AGENTS.md + .agents/skills/")]
+        Before -->|writes| CWD
+        CWD -.->|"framing + procedure<br/>discovered at init()"| Agent
+        Before --> Run --> Agent
+    end
+
+    Bedrock["AWS Bedrock<br/>claude-sonnet-4-6"]
+    GitLab["GitLab<br/>(commits / MRs / files)"]
+    Confluence["Confluence<br/>(standards)"]
+
+    Jira -->|"POST .../trigger/pipeline<br/>variables[ISSUE_KEY]"| Trigger
+    Trigger --> Queue --> Before
+    SkillsRepo -.->|"git clone (GITLAB_TOKEN)"| Before
+    Agent <-->|"InvokeModel<br/>(AWS_BEARER_TOKEN_BEDROCK)"| Bedrock
+    Agent -->|read issue| Jira
+    Agent -->|search| GitLab
+    Agent -->|read pages| Confluence
+    Agent -->|post triage comment| Jira
+    Agent -.->|exit| runner
+```
+
 ```yaml
 # .gitlab-ci.yml (ships in this folder) — the job that runs `flue run`
 triage:
