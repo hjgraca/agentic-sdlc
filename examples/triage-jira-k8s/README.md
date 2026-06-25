@@ -80,6 +80,34 @@ a CI gate branching on the outcome).
 
 ## Flow
 
+```mermaid
+flowchart LR
+    Jira["Jira<br/>(new/updated ticket)"]
+    SkillsRepo["Skills repo<br/>(skills.sh, own release cycle)"]
+
+    subgraph pod["Flue server (k8s pod)"]
+        Init["fetch-skills init container<br/>npx skills add -a universal"]
+        Vol[("emptyDir volume<br/>SKILLS_DIR=/skills<br/>AGENTS.md + .agents/skills/")]
+        Channel["Jira channel<br/>verify secret →<br/>dispatch(id: issueKey)"]
+        Agent["jira-triage agent<br/>(one durable instance per ticket)"]
+        Init -->|writes AGENTS.md + skills| Vol
+        Vol -.->|"framing + procedure<br/>discovered at init()"| Agent
+        Channel --> Agent
+    end
+
+    Bedrock["AWS Bedrock<br/>claude-sonnet-4-6"]
+    GitLab["GitLab<br/>(commits / MRs / files)"]
+    Confluence["Confluence<br/>(standards)"]
+
+    SkillsRepo -->|"git clone (GITLAB_TOKEN if private)"| Init
+    Jira -->|"POST /channels/jira/webhook<br/>x-webhook-secret"| Channel
+    Agent <-->|"InvokeModel (IRSA, us. profile)"| Bedrock
+    Agent -->|read issue| Jira
+    Agent -->|search| GitLab
+    Agent -->|read pages| Confluence
+    Agent -->|post triage comment| Jira
+```
+
 1. Jira fires a webhook on a new/updated bug ticket to
    `POST /channels/jira/webhook?secret=<JIRA_WEBHOOK_SECRET>`.
 2. The Jira channel verifies the secret, normalizes the payload, and
