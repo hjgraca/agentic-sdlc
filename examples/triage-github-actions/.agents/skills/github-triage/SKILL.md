@@ -20,6 +20,24 @@ list for your org; leave empty to search only the issue's own repo):
 
 - _(none — searches the issue's own repo by default)_
 
+### Search the LOCAL checkout first — not the code-search API
+
+This agent runs in GitHub Actions **after `actions/checkout`**, so the issue's
+own repo is already on disk in the working directory. To find code in **that**
+repo, search the filesystem directly (`grep`/`rg`, `read`) — do **not** use
+`github_search_code` for it. The code-search API is the wrong tool here:
+
+- It is heavily rate-limited (~10 req/min + a secondary burst limit), so two
+  calls in a row return HTTP 429.
+- Its index lags behind `main`, so a just-merged change returns **no results**
+  even though the code is present in the checkout.
+- The files are a local read away — no token round-trip needed.
+
+Use `github_search_code` **only** for related repos that are *not* checked out
+(the cross-repo case above). For the issue's own repo, prefer local `grep`/`rg`
+then `read` the matches. Use `github_get_file` only to read a file at a specific
+ref you don't have locally.
+
 ## Conventions to apply
 
 Read these in-repo docs (when present) and hold the project's standards in mind
@@ -34,9 +52,12 @@ each with `github_get_file`:
 1. Read the issue with `github_get_issue` to understand the reported problem.
 2. Read the convention docs above with `github_get_file` (skip any that 404) so
    the analysis reflects the project's standards.
-3. Use `github_search_code` to locate the source the issue is likely about
-   (search for symbols, error strings, or file fragments named in the issue),
-   then `github_get_file` to inspect the files that look relevant.
+3. Locate the source the issue is likely about (symbols, error strings, or file
+   fragments named in the issue). For the **issue's own repo**, search the local
+   checkout with `grep`/`rg` and `read` the matches — see "Search the LOCAL
+   checkout first" above. Use `github_search_code` only for related repos that
+   are not checked out, and `github_get_file` only to read a specific ref you do
+   not have locally.
 4. Use `github_search_pull_requests` to find PRs that touch the same area or
    reference the issue.
 5. Synthesize a concise triage summary: the likely root-cause area, the most
