@@ -32,6 +32,28 @@ A collection of **Flue agent reference architectures**. Each folder under
   channel). CI event ⇒ one-shot `flue run` ⇒ runner (no channel). They are not
   independent knobs.
 
+## Check the Flue ecosystem BEFORE writing any integration
+
+**Do this first, every time — do not hand-roll what Flue already ships.** Before
+adding a channel, a tool module, or a deploy for any provider, check whether Flue
+has an official package, CLI command, or documented pattern for it:
+
+- **Channels & tools:** check `https://flueframework.com/docs/ecosystem/channels/<provider>/`
+  and the provider's package (e.g. `@flue/github` gives `createGitHubChannel` +
+  an Octokit-backed `commentOnIssue` tool — don't reimplement webhook
+  verification or REST calls by hand). Scaffold with `flue add channel <provider>`
+  where it exists.
+- **Deploy:** check `https://flueframework.com/docs/ecosystem/deploy/<target>/`
+  for the canonical workflow/manifest (e.g. GitHub Actions, GitLab CI) and copy
+  its shape — `flue run`, `local()` sandbox, `--input`, env forwarding.
+- These are Amazon-external public docs: fetch them with the **WebFetch** tool,
+  not the internal `ReadInternalWebsites` tool.
+- Only build a custom channel/tool when the ecosystem genuinely lacks one — and
+  say so explicitly in the example (e.g. "we use the one-shot runner path, not
+  `@flue/github`'s channel, because …"). When you use a provider's official SDK
+  (e.g. `@octokit/rest`) instead of hand-rolled `fetch`, prefer the same client
+  the matching Flue channel is built on, for consistency.
+
 ## Flue app conventions (inside each example)
 
 - **Inbound is a channel, outbound is a tool.** A provider you *receive* webhooks

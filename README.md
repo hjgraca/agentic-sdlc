@@ -17,6 +17,7 @@ filters by what they have: work source, code host, trigger, and where it runs.
 |---|---|---|---|---|---|---|---|
 | [`triage-jira-k8s`](examples/triage-jira-k8s/) | triage a ticket, post enriched analysis back | Jira | GitLab | Confluence | webhook | Kubernetes (EKS) | ✅ complete |
 | [`triage-jira-gitlab-runner`](examples/triage-jira-gitlab-runner/) | same triage, one-shot in CI | Jira | GitLab | Confluence | Jira → GitLab pipeline trigger | GitLab runners | ✅ complete |
+| [`triage-github-actions`](examples/triage-github-actions/) | triage an issue, post enriched analysis back | GitHub | GitHub | — | `triage` label → `on: issues` | GitHub Actions | ✅ complete |
 
 Want triage on a different stack (e.g. Linear + GitLab + GitLab runners)? That's
 a new row/folder, not a config switch — each example is pinned to one trigger and
