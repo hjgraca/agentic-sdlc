@@ -58,5 +58,5 @@ src/
 
 ## Pattern reference
 
-See [`../../docs/architecture.md`](../../docs/architecture.md) and the complete
+See [`../../AGENTS.md`](../../AGENTS.md) for the conventions and the complete
 [`../triage-jira/`](../triage-jira/) example.

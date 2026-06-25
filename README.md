@@ -22,7 +22,7 @@ filters by what they have: work source, code host, trigger, and where it runs.
 Want triage on a different stack (e.g. Linear + GitLab + GitLab runners)? That's
 a new row/folder, not a config switch — each example is pinned to one trigger and
 one deploy, because the trigger model (webhook vs CI one-shot) determines the
-deploy. See [docs/architecture.md](docs/architecture.md).
+deploy.
 
 ## The shared architecture
 
@@ -41,7 +41,7 @@ Every example follows the same shape. Learn it once; each example is a variation
 - **Inbound = channel, outbound = tools.** A provider you *receive* from is a
   channel; one you only *call* is a set of tools.
 
-See [docs/architecture.md](docs/architecture.md) for the reasoning.
+See [AGENTS.md](AGENTS.md) for the full conventions.
 
 ## Adding your own skills
 

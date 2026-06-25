@@ -6,5 +6,5 @@ duplication.
 
 Quick map:
 - Repo overview + example index → [README.md](README.md)
-- Shared architecture (inbound=channel/outbound=tool, etc.) → [docs/architecture.md](docs/architecture.md)
+- Shared architecture (inbound=channel/outbound=tool, etc.) → [AGENTS.md](AGENTS.md)
 - How to add skills → [docs/adding-skills.md](docs/adding-skills.md)

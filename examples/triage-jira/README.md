@@ -1,7 +1,7 @@
 # triage-jira — Jira Triage Agent
 
 > One of the [Flue Agent Reference Architectures](../../README.md). See
-> [docs/architecture.md](../../docs/architecture.md) for the shared patterns and
+> [AGENTS.md](../../AGENTS.md) for the shared patterns and
 > [docs/adding-skills.md](../../docs/adding-skills.md) for adding your own skills.
 
 A [Flue](https://flueframework.com) project. A Jira webhook hits the Jira
