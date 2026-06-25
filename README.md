@@ -16,9 +16,7 @@ filters by what they have: work source, code host, trigger, and where it runs.
 | Example | Function | Work source | Code host | Extras | Trigger | Deploy | Status |
 |---|---|---|---|---|---|---|---|
 | [`triage-jira-k8s`](examples/triage-jira-k8s/) | triage a ticket, post enriched analysis back | Jira | GitLab | Confluence | webhook | Kubernetes (EKS) | ✅ complete |
-| [`triage-jira-gitlab-runner`](examples/triage-jira-gitlab-runner/) | same triage, one-shot in CI | Jira | GitLab | Confluence | Jira → GitLab pipeline trigger | GitLab runners | 📝 skeleton |
-| [`build-gitlab`](examples/build-gitlab/) | implement an issue, open a merge request | GitLab issue | GitLab | — | CI pipeline | GitLab runners | 📝 skeleton |
-| [`review-github`](examples/review-github/) | review a PR for security issues | GitHub PR | GitHub | — | Actions event | GitHub Actions | 📝 skeleton |
+| [`triage-jira-gitlab-runner`](examples/triage-jira-gitlab-runner/) | same triage, one-shot in CI | Jira | GitLab | Confluence | Jira → GitLab pipeline trigger | GitLab runners | ✅ complete |
 
 Want triage on a different stack (e.g. Linear + GitLab + GitLab runners)? That's
 a new row/folder, not a config switch — each example is pinned to one trigger and
@@ -51,7 +49,10 @@ skill. Full guide: [docs/adding-skills.md](docs/adding-skills.md).
 
 ## Getting started
 
-Pick an example and follow its README:
+- **New to this?** Build one from scratch:
+  [docs/creating-an-agent.md](docs/creating-an-agent.md).
+- **Have a stack in mind?** Pick the matching example from the table and follow
+  its README:
 
 ```bash
 cd examples/triage-jira-k8s

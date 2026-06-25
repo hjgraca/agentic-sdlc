@@ -4,14 +4,12 @@
 > [AGENTS.md](../../AGENTS.md) for the shared patterns and
 > [docs/adding-skills.md](../../docs/adding-skills.md) for adding your own skills.
 
-> 📝 **Skeleton.** Documents the shape and ships the CI wiring + starter skill.
-> The agent/tools are the same as [`../triage-jira-k8s/`](../triage-jira-k8s/) —
-> copy them in (see TODO).
-
 The **same triage agent** as `triage-jira-k8s` (reads the ticket, enriches with
 GitLab + Confluence, posts a comment back), but deployed **one-shot on a GitLab
 runner** instead of a long-running Kubernetes server. The agent, tools, and skill
-are identical — only the **trigger and deploy** differ.
+are identical — only the **trigger and deploy** differ: there is no
+`src/channels/` (the pipeline is the trigger) and no `k8s/` (the runner is the
+deploy).
 
 ## Why no channel — and how Jira reaches a runner
 
@@ -39,7 +37,7 @@ triage:
     - if: '$ISSUE_KEY'          # only run when triggered with an issue key
   script:
     - npm ci
-    - npx flue run jira-triage --input "{\"issueKey\":\"$ISSUE_KEY\"}"
+    - ./node_modules/.bin/flue run jira-triage --input "{\"message\":\"Triage Jira issue $ISSUE_KEY.\"}"
   variables:
     # masked CI/CD variables (Settings → CI/CD → Variables):
     #   JIRA_API_TOKEN, GITLAB_TOKEN, JIRA_BASE_URL, JIRA_EMAIL
@@ -60,16 +58,27 @@ src/
 The only code difference from `triage-jira-k8s`: **no `src/channels/`** (the
 pipeline is the trigger) and no `k8s/` (the runner is the deploy).
 
-## TODO to complete this example
+## Run it locally (one-shot, exactly as CI does)
 
-- [ ] Copy `src/agents/jira-triage.ts`, `src/tools/`, `AGENTS.md`,
-      `.agents/skills/`, `package.json`, `flue.config.ts`, `tsconfig.json` from
-      [`../triage-jira-k8s/`](../triage-jira-k8s/).
-- [ ] Delete `src/channels/` — ingress is the pipeline trigger, not a webhook.
-- [ ] Confirm the agent reads `issueKey` from the run input (it already accepts a
-      `message`; the skill takes `issueKey`).
-- [ ] Set the masked CI/CD variables in GitLab; create a pipeline trigger token.
-- [ ] Point the Jira automation web request at the trigger API URL above.
+```bash
+npm install
+cp .env.example .env   # fill in real creds (Bedrock uses AWS_PROFILE — no key)
+./node_modules/.bin/flue run jira-triage \
+  --input '{"message":"Triage Jira issue KAN-15."}'
+```
+
+`flue run` input must be an object with a string `message`; the skill picks the
+issue key out of it. The agent reads the ticket, searches the GitLab projects in
+the skill, applies the Confluence standards, and posts a comment back.
+
+## Deploy
+
+1. Set the masked CI/CD variables in GitLab (Settings → CI/CD → Variables):
+   `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`, `GITLAB_TOKEN`. Bedrock auth
+   comes from the runner's IAM role / environment.
+2. Create a pipeline trigger token (Settings → CI/CD → Pipeline trigger tokens).
+3. Point the Jira automation's "Send web request" at the trigger API URL above,
+   passing `variables[ISSUE_KEY]={{issue.key}}`.
 
 ## Trigger drives deploy
 

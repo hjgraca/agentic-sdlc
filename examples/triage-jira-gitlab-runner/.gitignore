@@ -1,0 +1,8 @@
+node_modules
+dist
+.env
+.flue
+
+# Local k8s overlay with real account values — never commit. Only the
+# kustomization.example.yaml template is tracked.
+k8s/local/kustomization.yaml

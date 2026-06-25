@@ -19,7 +19,7 @@ A collection of **Flue agent reference architectures**. Each folder under
   workspace. Duplication between examples is acceptable — clone-one-folder is the
   point.
 - **Naming: `<function>-<primary-stack>`** (e.g. `triage-jira-k8s`,
-  `build-gitlab`, `review-github`). The folder name is a unique handle keyed on
+  `triage-jira-gitlab-runner`). The folder name is a unique handle keyed on
   the work source; if two examples share that key (e.g. two Jira triagers on
   different deploys), append the deploy: `triage-jira-k8s` vs
   `triage-jira-gitlab-runner`. **Discovery happens via the README table**, not

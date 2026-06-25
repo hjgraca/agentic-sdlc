@@ -10,6 +10,8 @@ triage:
     - if: '$ISSUE_KEY' # only run when triggered with an issue key
   script:
     - npm ci
-    - npx flue run jira-triage --input "{\"issueKey\":\"$ISSUE_KEY\"}"
+    # `flue run` input must be an object with a string "message"; the skill
+    # picks the issue key out of it.
+    - ./node_modules/.bin/flue run jira-triage --input "{\"message\":\"Triage Jira issue $ISSUE_KEY.\"}"
   variables:
     GIT_DEPTH: "1"
