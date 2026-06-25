@@ -54,9 +54,9 @@ src/
 - [ ] `src/agents/security-review.ts` — wire model + `local()` sandbox + tools.
 - [ ] `AGENTS.md` + the security-review skill (starter included).
 - [ ] `.github/workflows/security-review.yml` — the workflow that runs `flue run`.
-- [ ] `package.json`, `flue.config.ts`, `tsconfig.json` (copy from `triage-jira`).
+- [ ] `package.json`, `flue.config.ts`, `tsconfig.json` (copy from `triage-jira-k8s`).
 
 ## Pattern reference
 
 See [`../../AGENTS.md`](../../AGENTS.md) for the conventions and the complete
-[`../triage-jira/`](../triage-jira/) example.
+[`../triage-jira-k8s/`](../triage-jira-k8s/) example.

@@ -4,12 +4,12 @@
 > skill. The tools and CI wiring are stubs to be fleshed out — see "TODO" below.
 
 A Flue agent that takes a GitLab issue describing a change, implements it in a
-sandbox, and opens a merge request. Unlike `triage-jira`, there is **no
+sandbox, and opens a merge request. Unlike `triage-jira-k8s`, there is **no
 channel** — it runs **one-shot inside a GitLab CI pipeline** and exits.
 
 ## Why no channel
 
-`triage-jira` is a long-running server because a webhook can arrive any time.
+`triage-jira-k8s` is a long-running server because a webhook can arrive any time.
 This example is triggered by a GitLab CI pipeline (e.g. on an issue label or a
 manual job), so the natural shape is:
 
@@ -46,13 +46,13 @@ the project's build/tests before opening the MR.
 ## TODO to complete this example
 
 - [ ] `src/tools/gitlab/gitlab.ts` — get issue, create branch, push commits, open MR
-      (write operations, unlike triage-jira's read-only GitLab tools).
+      (write operations, unlike triage-jira-k8s's read-only GitLab tools).
 - [ ] `src/agents/code-builder.ts` — wire model + `local()` sandbox + tools.
 - [ ] `AGENTS.md` + the build-from-issue skill (starter included).
 - [ ] `.gitlab-ci.yml` — the pipeline job that runs `flue run`.
-- [ ] `package.json`, `flue.config.ts`, `tsconfig.json` (copy from `triage-jira`).
+- [ ] `package.json`, `flue.config.ts`, `tsconfig.json` (copy from `triage-jira-k8s`).
 
 ## Pattern reference
 
 See [`../../AGENTS.md`](../../AGENTS.md) for the conventions and the complete
-[`../triage-jira/`](../triage-jira/) example.
+[`../triage-jira-k8s/`](../triage-jira-k8s/) example.

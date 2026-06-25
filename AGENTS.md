@@ -9,8 +9,8 @@ discovered at runtime. Don't conflate the two.
 
 A collection of **Flue agent reference architectures**. Each folder under
 `examples/` is a complete, independently-clonable Flue app. See the root
-[README.md](README.md) for the example index and [docs/](docs/) for the shared
-architecture and the skills guide.
+[README.md](README.md) for the example index and
+[docs/adding-skills.md](docs/adding-skills.md) for the skills guide.
 
 ## Repository conventions
 
@@ -18,9 +18,12 @@ architecture and the skills guide.
   `package.json`, skills, tools, deploy). No cross-example imports, no shared
   workspace. Duplication between examples is acceptable — clone-one-folder is the
   point.
-- **Naming: `<function>-<primary-stack>`** (e.g. `triage-jira`, `build-gitlab`,
-  `review-github`). The folder name is a unique handle keyed on the work source;
-  **discovery happens via the README table**, not the name. Providers and deploy
+- **Naming: `<function>-<primary-stack>`** (e.g. `triage-jira-k8s`,
+  `build-gitlab`, `review-github`). The folder name is a unique handle keyed on
+  the work source; if two examples share that key (e.g. two Jira triagers on
+  different deploys), append the deploy: `triage-jira-k8s` vs
+  `triage-jira-gitlab-runner`. **Discovery happens via the README table**, not
+  the name. Providers and deploy
   are columns there, not in the path.
 - **Each example is pinned to one trigger + one deploy.** "Same agent on a
   different deploy/stack" is a *new example*, not a config switch — because the
@@ -55,7 +58,7 @@ The LLM is **not** part of an example's identity; it's a one-line choice. The
 agent's `model:` field is a Flue **model specifier** — `<providerId>/<modelId>`:
 
 ```ts
-model: 'amazon-bedrock/us.anthropic.claude-sonnet-4-6',  // triage-jira's choice
+model: 'amazon-bedrock/us.anthropic.claude-sonnet-4-6',  // triage-jira-k8s's choice
 // e.g. also: 'anthropic/claude-sonnet-4-6' · 'openai/gpt-5.5'
 //            'openrouter/moonshotai/kimi-k2.6'
 ```
@@ -73,7 +76,7 @@ model: 'amazon-bedrock/us.anthropic.claude-sonnet-4-6',  // triage-jira's choice
   | `amazon-bedrock` | AWS credentials (`AWS_PROFILE` locally / IRSA in-cluster) + `AWS_REGION` |
   | `cloudflare` | Worker `AI` binding |
 
-- **`triage-jira` uses `amazon-bedrock` only because that's what the workshop
+- **`triage-jira-k8s` uses `amazon-bedrock` only because that's what the workshop
   cluster provides** (Bedrock via IRSA, `us.` profile — see gotchas). To run it
   on Anthropic instead: change the specifier to `anthropic/claude-sonnet-4-6` and
   set `ANTHROPIC_API_KEY`. Nothing else changes.

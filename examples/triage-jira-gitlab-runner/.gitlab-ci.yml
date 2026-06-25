@@ -1,0 +1,15 @@
+# One-shot triage on a GitLab runner. Triggered by Jira's automation calling
+# GitLab's pipeline trigger API with variables[ISSUE_KEY]={{issue.key}}.
+#
+# Set these as masked CI/CD variables (Settings → CI/CD → Variables):
+#   JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN, GITLAB_TOKEN
+# Create a pipeline trigger token under Settings → CI/CD → Pipeline trigger tokens.
+triage:
+  image: node:22
+  rules:
+    - if: '$ISSUE_KEY' # only run when triggered with an issue key
+  script:
+    - npm ci
+    - npx flue run jira-triage --input "{\"issueKey\":\"$ISSUE_KEY\"}"
+  variables:
+    GIT_DEPTH: "1"

@@ -69,7 +69,7 @@ uses it. Skills are *what to do*; tools are *what's possible*.
 
 ## Worked example
 
-See [`examples/triage-jira/.agents/skills/jira-triage/`](../examples/triage-jira/.agents/skills/jira-triage/)
+See [`examples/triage-jira-k8s/.agents/skills/jira-triage/`](../examples/triage-jira-k8s/.agents/skills/jira-triage/)
 — a skill whose body lists the GitLab projects to search and references a
 `triage-checklist.md`. A customer changes which projects are triaged, or what
 the triage must contain, by editing that markdown — not the TypeScript.
