@@ -117,7 +117,7 @@ export const setLabels = defineTool({
 export const searchCode = defineTool({
 	name: 'github_search_code',
 	description:
-		'Search code in a repo for a term (symbol, error string, file fragment). Use to locate the source an issue is likely about. Returns matching file paths.',
+		'Search code in a repo for a term (symbol, error string, file fragment). Use to locate the source an issue is likely about. Returns { total_count, returned, truncated, items: [{ path, url }] }; if truncated is true, more matches exist than were returned — narrow the query.',
 	input: v.object({ repo: v.string(), query: v.string() }),
 	run: async ({ input }) => {
 		try {
@@ -125,7 +125,16 @@ export const searchCode = defineTool({
 				q: `${input.query} repo:${input.repo}`,
 				per_page: 20,
 			});
-			return JSON.stringify(data.items.map((m) => ({ path: m.path, url: m.html_url })));
+			// Surface the true match count and a truncation flag — a bare array
+			// hides whether 20 results are all of them or just page 1, so the
+			// model can't tell complete coverage from a silent cap.
+			const items = data.items.map((m) => ({ path: m.path, url: m.html_url }));
+			return JSON.stringify({
+				total_count: data.total_count,
+				returned: items.length,
+				truncated: data.total_count > items.length,
+				items,
+			});
 		} catch (err) {
 			return `GitHub code search failed: ${String(err)}`;
 		}
@@ -135,7 +144,7 @@ export const searchCode = defineTool({
 export const searchPullRequests = defineTool({
 	name: 'github_search_pull_requests',
 	description:
-		'Search pull requests in a repo by a term such as a keyword or issue number. Use to find PRs related to an issue.',
+		'Search pull requests in a repo by a term such as a keyword or issue number. Use to find PRs related to an issue. Returns { total_count, returned, truncated, items: [{ number, title, state, url }] }; if truncated is true, more matches exist than were returned — narrow the query.',
 	input: v.object({
 		repo: v.string(),
 		query: v.string(),
@@ -148,14 +157,20 @@ export const searchPullRequests = defineTool({
 				q: `${input.query} repo:${input.repo} is:pr${state}`,
 				per_page: 20,
 			});
-			return JSON.stringify(
-				data.items.map((p) => ({
-					number: p.number,
-					title: p.title,
-					state: p.state,
-					url: p.html_url,
-				})),
-			);
+			// Same envelope as github_search_code: carry total_count + truncated
+			// so a partial result set is never mistaken for full coverage.
+			const items = data.items.map((p) => ({
+				number: p.number,
+				title: p.title,
+				state: p.state,
+				url: p.html_url,
+			}));
+			return JSON.stringify({
+				total_count: data.total_count,
+				returned: items.length,
+				truncated: data.total_count > items.length,
+				items,
+			});
 		} catch (err) {
 			return `GitHub PR search failed: ${String(err)}`;
 		}
