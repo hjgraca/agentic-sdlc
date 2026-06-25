@@ -220,9 +220,11 @@ this with an init container:
 
 Point it at your repo + ref via the overlay (see `k8s/local/`); the init
 container re-runs on every pod start, so a **rolling restart picks up new skills
-with no app rebuild**. The skills-from-registry alternative is a one-line swap of
-the init command (`npx @skills-sh/cli add <owner>/<repo>`) — see the comment in
-`deployment.yaml`.
+with no app rebuild**. If the skills repo is **private**, the init container
+reuses `GITLAB_TOKEN` from the Secret (injected into the clone URL); it's
+optional, so a public repo needs no token. The skills-from-registry alternative
+is a one-line swap of the init command (`npx @skills-sh/cli add <owner>/<repo>`,
+on a node image) — see the comment in `deployment.yaml`.
 
 > **Why not a ConfigMap?** A ConfigMap caps at ~1 MB and flattens directory
 > structure, so it can't carry a skill's `references/` subtree. `emptyDir` +

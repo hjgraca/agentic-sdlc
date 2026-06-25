@@ -49,22 +49,35 @@ spec:
         # from the agent image. Pin a tag/sha for reproducibility. Re-runs on
         # every pod start, so a rolling restart picks up new skills with no app
         # rebuild. The overlay patches in your real skills source (see local/).
+        # alpine/git is a tiny purpose-built image with git preinstalled.
+        # (For the skills.sh registry alternative — `npx @skills-sh/cli add
+        # <owner>/<repo> --dir /skills/.agents/skills` — use a node image here.)
         - name: fetch-skills
-          image: node:22-slim
+          image: alpine/git:latest
           command:
             - sh
             - -c
-            # Default: clone a git repo whose root holds .agents/skills/.
-            #   Alternative (skills.sh registry):
-            #     npx -y @skills-sh/cli add <owner>/<repo> --dir /skills/.agents/skills
+            # Clone a repo whose root holds .agents/skills/. If GITLAB_TOKEN is
+            # set (private repo), inject it into the URL; otherwise clone as-is.
             - >-
-              git clone --depth 1 --branch "$SKILLS_REF"
-              "$SKILLS_REPO" /skills
+              URL="$SKILLS_REPO";
+              if [ -n "$GITLAB_TOKEN" ]; then
+              URL=$(echo "$SKILLS_REPO" | sed -E "s#https://#https://oauth2:${GITLAB_TOKEN}@#");
+              fi;
+              git clone --depth 1 --branch "$SKILLS_REF" "$URL" /skills
           env:
             - name: SKILLS_REPO
               value: "https://gitlab.com/your-org/triage-skills.git"
             - name: SKILLS_REF
               value: "main"
+            # Optional: auth for a private skills repo. Reuses the app's GitLab
+            # token from the Secret; harmless (empty) if the repo is public.
+            - name: GITLAB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: flue-triage-secrets
+                  key: GITLAB_TOKEN
+                  optional: true
           volumeMounts:
             - name: skills
               mountPath: /skills
