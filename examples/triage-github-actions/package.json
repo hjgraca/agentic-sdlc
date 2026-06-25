@@ -1,0 +1,17 @@
+{
+	"name": "triage-github-actions",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"run:triage": "flue run github-triage"
+	},
+	"dependencies": {
+		"@flue/runtime": "1.0.0-beta.5",
+		"@octokit/rest": "22.0.1",
+		"valibot": "^1.4.1"
+	},
+	"devDependencies": {
+		"@flue/cli": "1.0.0-beta.5",
+		"typescript": "^5.9.3"
+	}
+}
