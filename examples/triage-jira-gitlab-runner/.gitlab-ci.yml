@@ -1,21 +1,28 @@
-# One-shot triage on a GitLab GROUP runner. Triggered by Jira's automation
-# calling GitLab's pipeline trigger API with variables[ISSUE_KEY]={{issue.key}}.
+# One-shot triage on a GitLab runner. Triggered by Jira's automation calling
+# GitLab's pipeline trigger API with variables[ISSUE_KEY]={{issue.key}}.
 #
-# Set these as masked CI/CD variables at the GROUP level (Group → Settings →
-# CI/CD → Variables) so every project in the group inherits them:
+# Set these as masked CI/CD variables (Settings → CI/CD → Variables):
 #   JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN, GITLAB_TOKEN
-# A group runner (Group → Build → Runners) executes the job — no per-project
-# runner needed. The pipeline + its trigger token remain PROJECT-scoped
-# (GitLab has no group-level pipeline), but variables and runner are shared.
+# Create a pipeline trigger token under Settings → CI/CD → Pipeline trigger tokens.
 triage:
   image: node:22
-  tags: [group-runner] # optional: target the group runner by tag
+  # Agents can run for a while (model + several API round-trips); give them room.
+  timeout: 30 minutes
+  # Only run for a pipeline-trigger carrying an issue key — never on a push/branch
+  # pipeline. Jira's automation triggers with variables[ISSUE_KEY]={{issue.key}}.
   rules:
-    - if: '$ISSUE_KEY' # only run when triggered with an issue key
-  script:
+    - if: '$CI_PIPELINE_SOURCE == "trigger" && $ISSUE_KEY'
+  before_script:
     - npm ci
+  script:
     # `flue run` input must be an object with a string "message"; the skill
     # picks the issue key out of it.
     - ./node_modules/.bin/flue run jira-triage --input "{\"message\":\"Triage Jira issue $ISSUE_KEY.\"}"
   variables:
     GIT_DEPTH: "1"
+  # NOTE: we intentionally do NOT use `local({ env })` to forward secrets into
+  # the sandbox. Flue's GitLab CI guide forwards env for agents whose model runs
+  # CLIs (glab/git) inside the sandbox shell. Our tools are typed defineTool
+  # `fetch` functions that read process.env in the host Node process — the model
+  # never gets a shell or the token (the guide's tighter, recommended pattern),
+  # so there is nothing to forward.
