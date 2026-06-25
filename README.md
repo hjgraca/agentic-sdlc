@@ -1,4 +1,4 @@
-# Flue Agent Reference Architectures
+# Agent Reference Architectures
 
 Production-shaped examples of autonomous agents built on
 [Flue](https://flueframework.com). Each example under `examples/` is a complete,
