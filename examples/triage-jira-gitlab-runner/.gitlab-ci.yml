@@ -1,11 +1,15 @@
-# One-shot triage on a GitLab runner. Triggered by Jira's automation calling
-# GitLab's pipeline trigger API with variables[ISSUE_KEY]={{issue.key}}.
+# One-shot triage on a GitLab GROUP runner. Triggered by Jira's automation
+# calling GitLab's pipeline trigger API with variables[ISSUE_KEY]={{issue.key}}.
 #
-# Set these as masked CI/CD variables (Settings → CI/CD → Variables):
+# Set these as masked CI/CD variables at the GROUP level (Group → Settings →
+# CI/CD → Variables) so every project in the group inherits them:
 #   JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN, GITLAB_TOKEN
-# Create a pipeline trigger token under Settings → CI/CD → Pipeline trigger tokens.
+# A group runner (Group → Build → Runners) executes the job — no per-project
+# runner needed. The pipeline + its trigger token remain PROJECT-scoped
+# (GitLab has no group-level pipeline), but variables and runner are shared.
 triage:
   image: node:22
+  tags: [group-runner] # optional: target the group runner by tag
   rules:
     - if: '$ISSUE_KEY' # only run when triggered with an issue key
   script:
