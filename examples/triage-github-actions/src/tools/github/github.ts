@@ -26,10 +26,24 @@ const octokit = new Octokit({
 	...(process.env.GITHUB_API_URL ? { baseUrl: process.env.GITHUB_API_URL } : {}),
 });
 
-/** Split an "owner/repo" string into Octokit's { owner, repo }. */
+/**
+ * Split an "owner/repo" string into Octokit's { owner, repo }.
+ *
+ * Validates strictly: the value comes from the skill parsing free text out of
+ * the run input, so a pasted URL, an extra path segment, or a missing slash are
+ * realistic. Without this guard those silently yield a wrong or `undefined`
+ * coordinate and every tool fails deep inside Octokit with an opaque error. We
+ * throw a clear message instead; each tool's `run` catch returns it to the
+ * model as actionable output.
+ */
 function splitRepo(repo: string): { owner: string; repo: string } {
-	const [owner, name] = repo.split('/');
-	return { owner, repo: name };
+	const parts = repo.split('/');
+	if (parts.length !== 2 || !parts[0] || !parts[1]) {
+		throw new Error(
+			`Invalid repo "${repo}": expected "owner/repo" (exactly one slash, no empty segments).`,
+		);
+	}
+	return { owner: parts[0], repo: parts[1] };
 }
 
 export const getIssue = defineTool({
