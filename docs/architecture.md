@@ -15,10 +15,7 @@ src/
 └── tools/<provider>/              # outbound: the API calls the agent makes
 ```
 
-## Principles
-
-### Inbound is a channel, outbound is a tool
-The single rule that decides where an integration goes:
+## The one rule to internalize: inbound is a channel, outbound is a tool
 
 - A provider you **receive events from** (a webhook) → a **channel**. It verifies
   the request and dispatches to the agent. It never calls back out.
@@ -29,23 +26,10 @@ A provider can be both. In `triage-jira`, Jira is a *channel* (the webhook in)
 and a *tool* (read issue / post comment out); GitLab and Confluence are
 tools-only because the agent only calls them.
 
-### The agent file is wiring; prose lives outside it
-`src/agents/<name>.ts` declares the model, sandbox, and tool set — nothing else.
-The agent's role is in `AGENTS.md`; its procedure is in a skill. This keeps the
-behavior editable by non-developers and on a separate release cycle from code.
-See [adding-skills.md](adding-skills.md).
-
-### Skills are discovered, not bundled
-Flue reads `AGENTS.md` and `.agents/skills/` from the sandbox cwd at `init()`,
-and rereads a skill on each activation. The agent points its sandbox at
-`process.env.SKILLS_DIR ?? process.cwd()`, so production can mount a different
-skill set without rebuilding.
-
-### Secrets come from the environment, never code
-Credentials are read from `process.env` at call time and supplied per
-environment (local `.env`, Kubernetes Secret, CI masked variable, cloud IAM).
-No keys in code or committed config. Each example ships a `.env.example` and,
-where relevant, a `secret.example.yaml` with placeholders only.
+The remaining conventions — agent files are pure wiring, skills are discovered
+not bundled, secrets come from the environment, model is a configurable
+specifier — are written up in the repo-root [AGENTS.md](../AGENTS.md). Adding or
+changing skills: [adding-skills.md](adding-skills.md).
 
 ## What varies between examples
 
