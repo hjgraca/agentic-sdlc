@@ -32,8 +32,13 @@ src/
         └── gitlab.ts         # search commits / MRs / read files
                               # (imported directly; no barrel index files)
 k8s/
-├── deployment.yaml           # listener Deployment + Service
-└── secret.example.yaml       # secret template (fill real values out-of-band)
+├── base/                     # generic, committed
+│   ├── deployment.yaml       # Namespace + ServiceAccount + Deployment + NLB Service
+│   ├── secret.example.yaml   # secret template (fill real values out-of-band)
+│   └── kustomization.yaml
+└── local/
+    ├── kustomization.example.yaml  # overlay template (committed)
+    └── kustomization.yaml          # your real account values (gitignored)
 ```
 
 ### Where the text lives
@@ -112,8 +117,9 @@ JIRA_WEBHOOK_SECRET=testsecret ./node_modules/.bin/flue dev --target node
 
 Deployed and verified on the `workshop` EKS cluster. The app runs in its own
 `flue-triage` namespace (isolated from the existing `agents` app) as a single
-long-running Flue server; `k8s/deployment.yaml` creates the Namespace,
-ServiceAccount (IRSA), Deployment, and an internet-facing NLB Service.
+long-running Flue server. `k8s/base/` defines the Namespace, ServiceAccount
+(IRSA), Deployment, and an internet-facing NLB Service; a gitignored
+`k8s/local/` overlay patches in your account values (see below).
 
 ```bash
 # 1. Build for the cluster's CPU arch (EKS nodes are amd64; an arm64 image
@@ -124,8 +130,8 @@ aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS 
   --password-stdin "$REGISTRY"
 docker build --platform linux/amd64 -t "$REGISTRY/flue-triage:v1" .
 docker push "$REGISTRY/flue-triage:v1"
-# Set REGISTRY to your own ECR (or other) registry; bump the image tag in
-# k8s/deployment.yaml to match.
+# Set REGISTRY to your own ECR (or other) registry; set the matching image
+# name/tag in your k8s/local/ overlay (step 3).
 
 # 2. Secret (your chosen naming; JIRA_WEBHOOK_SECRET must match what the Jira
 #    automation sends as the x-webhook-secret header / ?secret=).
@@ -135,9 +141,26 @@ kubectl -n flue-triage create secret generic flue-triage-secrets \
   --from-literal=JIRA_WEBHOOK_SECRET=...
 # AWS Bedrock auth comes from the pod's IAM role (IRSA), not a secret.
 
-kubectl apply -f k8s/deployment.yaml
+# 3. Deploy via your LOCAL overlay (your account values stay out of git).
+cp k8s/local/kustomization.example.yaml k8s/local/kustomization.yaml
+# edit k8s/local/kustomization.yaml — registry, IAM role ARN, Jira site, bot email
+kubectl apply -k k8s/local/
 kubectl -n flue-triage rollout status deploy/flue-triage
 ```
+
+### Account values stay local (Kustomize)
+
+The committed manifest (`k8s/base/`) is generic — it has placeholders, not your
+account. Your real values live in `k8s/local/kustomization.yaml`, which is
+**gitignored**. You never hand-edit a committed file:
+
+- `k8s/base/` — generic Deployment + Service + ServiceAccount (committed).
+- `k8s/local/kustomization.example.yaml` — the overlay **template** (committed):
+  registry image, IRSA role ARN, Jira site, bot email.
+- `k8s/local/kustomization.yaml` — your copy with real values (**gitignored**).
+
+`kubectl apply -k k8s/local/` builds base + overlay. Secrets are separate — they
+go in the `flue-triage-secrets` Secret created above, never in the overlay.
 
 ### Deployment notes (lessons that generalize)
 

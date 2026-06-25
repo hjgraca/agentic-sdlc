@@ -110,8 +110,14 @@ model: 'amazon-bedrock/us.anthropic.claude-sonnet-4-6',  // triage-jira's choice
   is gitignored; never commit it.
 - Secrets come from the environment at runtime (local `.env`, k8s Secret, CI
   masked variable, cloud IAM) — never hardcoded in code or committed config.
-  Example files (`.env.example`, `k8s/secret.example.yaml`) carry placeholders
-  only.
+  Example files (`.env.example`, `k8s/base/secret.example.yaml`) carry
+  placeholders only.
+- **Account-specific (non-secret) deploy values use a Kustomize overlay, not
+  hand-edits.** `k8s/base/` is generic + committed; real registry/IAM-ARN/org
+  values go in `k8s/local/kustomization.yaml` (gitignored). Customers
+  `cp kustomization.example.yaml kustomization.yaml`, fill it in, and
+  `kubectl apply -k k8s/local/`. Never commit account ids, role ARNs, ECR paths,
+  org URLs, or live hostnames.
 - Pin dependencies to concrete versions; do not use `"latest"`.
 - Use `git mv` for moves/renames so history is preserved.
 
