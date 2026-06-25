@@ -64,34 +64,32 @@ in the image. How each deploy target does it:
 ### 3. Install from a registry (skills.sh)
 [skills.sh](https://skills.sh) distributes skills as git repos. Its `add` command
 accepts a GitHub `owner/repo` shorthand **or any git URL — including a GitLab
-repo**, so the same Skills Project repo we use everywhere else is a valid source:
+repo**, so the same Skills Project repo we use everywhere else is a valid source.
+
+**Install with `-a universal`** — that target writes to exactly `.agents/skills/`,
+which is the path Flue discovers, so no bridge is needed:
 
 ```bash
-npx skills add https://gitlab.com/<org>/<repo> -a pi -s '*' --copy -y
+npx skills add https://gitlab.com/<org>/<repo> -a universal -s '*' --copy -y
+export SKILLS_DIR="$PWD"   # Flue discovers $PWD/.agents/skills/
 ```
 
-**Two gotchas, both verified against this repo:**
+Use `--copy` so real files (not symlinks into a throwaway clone) land in the dir,
+with the skill's `references/` subtree.
 
-1. **It installs to a per-agent directory, not `.agents/skills/`.** There is no
-   `--dir` flag; `skills add` writes to an agent-named folder chosen by `-a`
-   (e.g. `.pi/skills/`, `.claude/skills/`, eve's `agent/skills/`). Flue discovers
-   only `<SKILLS_DIR>/.agents/skills/` (hardcoded). So bridge the two with a
-   symlink after install:
+**Why the agent target matters.** `SKILLS_DIR` is a *base path* — Flue always
+appends the literal `.agents/skills` to it (it is not configurable). skills.sh
+installs to a folder named for the `-a` agent: `universal` (and `promptscript`)
+use `.agents/skills/`, but `pi` → `.pi/skills/`, `claude-code` → `.claude/skills/`,
+`eve` → `agent/skills/`. Only `universal` lines up with Flue out of the box; pick
+any other and you'd have to symlink `.agents/skills` at its install dir. There is
+no `--dir` flag to override the location. **Use `-a universal`.**
 
-   ```bash
-   npx skills add https://gitlab.com/<org>/<repo> -a pi -s '*' --copy -y
-   mkdir -p .agents && ln -s ../.pi/skills .agents/skills   # Flue now discovers them
-   export SKILLS_DIR="$PWD"
-   ```
-
-   Use `--copy` so real files (not symlinks into a clone) land in the agent dir,
-   and the skill's `references/` subtree comes along.
-
-2. **Private repos rely on ambient git auth.** skills.sh shells out to `git
-   clone` with no token flag, so a private GitLab repo only works where git is
-   already authenticated (a credential helper, an `oauth2:$TOKEN@` remote, or an
-   SSH key). In CI/k8s, prefer the plain `git clone` paths in option 2 (they take
-   `GITLAB_TOKEN` explicitly) and reserve skills.sh for local/registry use.
+**Private repos rely on ambient git auth.** skills.sh shells out to `git clone`
+with no token flag, so a private GitLab repo only works where git is already
+authenticated (a credential helper, an `oauth2:$TOKEN@` remote, or an SSH key).
+In CI/k8s, prefer the plain `git clone` paths in option 2 (they take
+`GITLAB_TOKEN` explicitly); reserve skills.sh for local or public-registry use.
 
 Run the install at deploy time (CI step or init container) so the agent discovers
 the skills at boot. No code change, separate release cycle from the agent.
@@ -124,7 +122,7 @@ only the injected skills differed.
 | **Local** | `SKILLS_DIR=/path/to/skills flue run` | default run had no marker; override run did |
 | **GitLab runner** | `before_script` clones the skills repo, exports `SKILLS_DIR` | job log shows `Cloning into './skills'`; comment carried the marker |
 | **Kubernetes** | `fetch-skills` init container clones into an `emptyDir`; app sets `SKILLS_DIR=/skills` | init container exits 0, `/skills/.agents/skills/` mounted; webhook triage carried the marker |
-| **skills.sh** | `skills add <git-url>` + symlink bridge into `.agents/skills/` | triage run via the bridged dir carried the marker |
+| **skills.sh** | `skills add <git-url> -a universal` (installs straight to `.agents/skills/`) | triage run via that dir carried the marker |
 
 Key facts each path confirmed:
 
@@ -134,5 +132,6 @@ Key facts each path confirmed:
   layout can't carry a skill's `references/` subtree.
 - **A rolling restart re-runs the init container**, so new skills land with no
   app rebuild — the separate-release-cycle goal.
-- **skills.sh needs the symlink bridge** because it installs to `.pi/skills/` /
-  `.claude/skills/`, not Flue's `.agents/skills/`, and has no `--dir` flag.
+- **skills.sh works with `-a universal`**, which installs straight to
+  `.agents/skills/`; other agent targets (`pi`, `claude-code`, `eve`) use a
+  different folder and would need a symlink, and there is no `--dir` flag.

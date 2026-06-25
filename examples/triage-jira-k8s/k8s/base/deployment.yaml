@@ -50,8 +50,9 @@ spec:
         # every pod start, so a rolling restart picks up new skills with no app
         # rebuild. The overlay patches in your real skills source (see local/).
         # alpine/git is a tiny purpose-built image with git preinstalled.
-        # (skills.sh alternative: a node image running `npx skills add <git-url>`
-        # + a symlink bridge into .agents/skills/ — see docs/adding-skills.md.)
+        # (skills.sh alternative: a node image running
+        # `npx skills add <git-url> -a universal` — installs straight to
+        # .agents/skills/. See docs/adding-skills.md.)
         - name: fetch-skills
           image: alpine/git:latest
           command:

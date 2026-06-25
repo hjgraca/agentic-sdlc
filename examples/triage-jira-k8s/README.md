@@ -223,8 +223,9 @@ container re-runs on every pod start, so a **rolling restart picks up new skills
 with no app rebuild**. If the skills repo is **private**, the init container
 reuses `GITLAB_TOKEN` from the Secret (injected into the clone URL); it's
 optional, so a public repo needs no token. A skills.sh registry alternative
-works too (a node image running `npx skills add <git-url>` plus a symlink bridge
-into `.agents/skills/`) — see [docs/adding-skills.md](../../docs/adding-skills.md).
+works too (a node image running `npx skills add <git-url> -a universal`, which
+installs straight to `.agents/skills/`) — see
+[docs/adding-skills.md](../../docs/adding-skills.md).
 
 > **Why not a ConfigMap?** A ConfigMap caps at ~1 MB and flattens directory
 > structure, so it can't carry a skill's `references/` subtree. `emptyDir` +

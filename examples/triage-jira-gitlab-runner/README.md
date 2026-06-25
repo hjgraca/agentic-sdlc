@@ -103,8 +103,9 @@ agent), set the optional CI/CD variables `SKILLS_REPO` (a git repo whose root
 holds `.agents/skills/`) and `SKILLS_REF` (a tag/sha to pin). The `before_script`
 clones it into the workspace and exports `SKILLS_DIR`; Flue discovers
 `$SKILLS_DIR/.agents/skills/` at init. No rebuild — the next pipeline picks up
-the pinned ref. (skills.sh registry alternative — note it needs a symlink bridge
-into `.agents/skills/`; see [docs/adding-skills.md](../../docs/adding-skills.md).)
+the pinned ref. (skills.sh registry alternative — use `-a universal` so it
+installs straight to `.agents/skills/`; see
+[docs/adding-skills.md](../../docs/adding-skills.md).)
 This is the runner counterpart to `triage-jira-k8s`'s init-container fetch — same
 `SKILLS_DIR` contract, different delivery for a one-shot job.
 
