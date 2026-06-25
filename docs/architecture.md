@@ -39,7 +39,7 @@ See [adding-skills.md](adding-skills.md).
 Flue reads `AGENTS.md` and `.agents/skills/` from the sandbox cwd at `init()`,
 and rereads a skill on each activation. The agent points its sandbox at
 `process.env.SKILLS_DIR ?? process.cwd()`, so production can mount a different
-skill set without rebuilding. (See `examples/triage-jira/docs/adr/0002-*`.)
+skill set without rebuilding.
 
 ### Secrets come from the environment, never code
 Credentials are read from `process.env` at call time and supplied per

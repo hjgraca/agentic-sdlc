@@ -125,5 +125,4 @@ model: 'amazon-bedrock/us.anthropic.claude-sonnet-4-6',  // triage-jira's choice
 
 1. Build the affected example: `cd examples/<name> && ./node_modules/.bin/flue build --target node`.
 2. For channel changes, smoke-test the webhook (valid → 200, wrong secret → 401).
-3. Keep docs in sync: the root README table, `docs/`, and each example's README
-   and `docs/adr/`.
+3. Keep docs in sync: the root README table, `docs/`, and each example's README.

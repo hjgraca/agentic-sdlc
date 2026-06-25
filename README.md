@@ -41,8 +41,7 @@ Every example follows the same shape. Learn it once; each example is a variation
 - **Inbound = channel, outbound = tools.** A provider you *receive* from is a
   channel; one you only *call* is a set of tools.
 
-See [docs/architecture.md](docs/architecture.md) for the reasoning, and each
-example's own `docs/adr/` for its decisions.
+See [docs/architecture.md](docs/architecture.md) for the reasoning.
 
 ## Adding your own skills
 

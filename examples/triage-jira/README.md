@@ -55,8 +55,8 @@ text is discovered by Flue from the workspace at `init()`:
 
 Skills are **not** imported with `with { type: 'skill' }`. Flue discovers them at
 `init()` from `<cwd>/.agents/skills/<name>/SKILL.md` inside the agent's sandbox,
-and rereads `SKILL.md` on activation — so edits land without a rebuild
-(ADR-0002). The agent just needs a filesystem sandbox pointed at the right cwd:
+and rereads `SKILL.md` on activation — so edits land without a rebuild. The
+agent just needs a filesystem sandbox pointed at the right cwd:
 
 ```ts
 const cwd = process.env.SKILLS_DIR ?? process.cwd();

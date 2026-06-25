@@ -8,4 +8,3 @@ Quick map:
 - Repo overview + example index → [README.md](README.md)
 - Shared architecture (inbound=channel/outbound=tool, etc.) → [docs/architecture.md](docs/architecture.md)
 - How to add skills → [docs/adding-skills.md](docs/adding-skills.md)
-- Per-example design decisions → `examples/<name>/docs/adr/`
