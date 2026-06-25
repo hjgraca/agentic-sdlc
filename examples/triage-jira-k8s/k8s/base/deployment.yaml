@@ -45,34 +45,32 @@ spec:
         - name: skills
           emptyDir: {}
       initContainers:
-        # Fetch skills from their OWN repo/registry — a separate release cycle
-        # from the agent image. Pin a tag/sha for reproducibility. Re-runs on
-        # every pod start, so a rolling restart picks up new skills with no app
-        # rebuild. The overlay patches in your real skills source (see local/).
-        # alpine/git is a tiny purpose-built image with git preinstalled.
-        # (skills.sh alternative: a node image running
-        # `npx skills add <git-url> -a universal` — installs straight to
-        # .agents/skills/. See docs/adding-skills.md.)
+        # Fetch skills from their OWN repo — a separate release cycle from the
+        # agent image — via skills.sh. Re-runs on every pod start, so a rolling
+        # restart picks up new skills with no app rebuild. `skills add -a
+        # universal` installs straight to .agents/skills/ (Flue's discovery
+        # path), so running it from /skills lands them at /skills/.agents/skills/.
+        # The overlay patches in your real SKILLS_REPO (see local/).
+        # node:22 (not -slim) ships git, which skills.sh shells out to.
         - name: fetch-skills
-          image: alpine/git:latest
+          image: node:22
+          workingDir: /skills
           command:
             - sh
             - -c
-            # Clone a repo whose root holds .agents/skills/. If GITLAB_TOKEN is
-            # set (private repo), inject it into the URL; otherwise clone as-is.
-            - >-
-              URL="$SKILLS_REPO";
+            # The repo is private and skills.sh strips any oauth2:token@ from the
+            # URL, so give git the credential below the CLI via an insteadOf
+            # rewrite. Skip it (and the clone still works) for a public repo.
+            - |
               if [ -n "$GITLAB_TOKEN" ]; then
-              URL=$(echo "$SKILLS_REPO" | sed -E "s#https://#https://oauth2:${GITLAB_TOKEN}@#");
-              fi;
-              git clone --depth 1 --branch "$SKILLS_REF" "$URL" /skills
+                git config --global url."https://oauth2:$GITLAB_TOKEN@gitlab.com/".insteadOf "https://gitlab.com/"
+              fi
+              npx -y skills add "https://gitlab.com/$SKILLS_REPO" -a universal -y
           env:
+            # Skills Project repo path (org/path, no host) — patched by the overlay.
             - name: SKILLS_REPO
-              value: "https://gitlab.com/your-org/triage-skills.git"
-            - name: SKILLS_REF
-              value: "main"
-            # Optional: auth for a private skills repo. Reuses the app's GitLab
-            # token from the Secret; harmless (empty) if the repo is public.
+              value: "your-org/triage-skills"
+            # Private-repo auth: GITLAB_TOKEN from the Secret. Omit for a public repo.
             - name: GITLAB_TOKEN
               valueFrom:
                 secretKeyRef:

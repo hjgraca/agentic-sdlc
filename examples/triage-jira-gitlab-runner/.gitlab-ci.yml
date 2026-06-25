@@ -3,6 +3,7 @@
 #
 # Set these as masked CI/CD variables (Settings → CI/CD → Variables):
 #   JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN, GITLAB_TOKEN
+#   (optional) SKILLS_REPO — Skills Project repo path, e.g. my-org/triage-skills
 # Create a pipeline trigger token under Settings → CI/CD → Pipeline trigger tokens.
 triage:
   image: node:22
@@ -14,18 +15,29 @@ triage:
     - if: '$CI_PIPELINE_SOURCE == "trigger" && $ISSUE_KEY'
   before_script:
     - npm ci
-    # Fetch the Skills Project from its OWN repo — separate release cycle from
-    # this agent. Pin SKILLS_REF (a tag/sha) for reproducibility. Then point
-    # Flue's sandbox cwd at it; Flue discovers $SKILLS_DIR/.agents/skills/ at
-    # init(). Set SKILLS_REPO / SKILLS_REF as CI/CD variables. Omit all three
-    # to fall back to the .agents/skills/ committed in this repo.
-    # skills.sh alternative (installs straight to .agents/skills/; see
-    # docs/adding-skills.md): npx -y skills add <git-url> -a universal -s '*' --copy -y
+    # Fetch the Skills Project from its OWN repo (separate release cycle from
+    # this agent) via skills.sh, then point Flue's sandbox cwd at it (Flue
+    # discovers $SKILLS_DIR/.agents/skills/ at init()). `-a universal` installs
+    # straight to .agents/skills/, so no symlink bridge is needed. Set
+    # SKILLS_REPO (org/path, no host) to enable; omit it to fall back to the
+    # .agents/skills/ committed in this repo.
+    #
+    # The repo is private and skills.sh strips any oauth2:token@ from the URL,
+    # so give git the credential below the CLI via an insteadOf rewrite.
+    # GITLAB_TOKEN is already a CI/CD variable.
     - |
       if [ -n "$SKILLS_REPO" ]; then
-        git clone --depth 1 --branch "${SKILLS_REF:-main}" "$SKILLS_REPO" ./skills
+        git config --global url."https://oauth2:${GITLAB_TOKEN}@gitlab.com/".insteadOf "https://gitlab.com/"
+        mkdir -p ./skills && (cd ./skills && npx -y skills add "https://gitlab.com/${SKILLS_REPO}" -a universal -y)
         export SKILLS_DIR="$CI_PROJECT_DIR/skills"
       fi
+    # Plain `git clone` alternative (no skills.sh; pin a tag/sha via SKILLS_REF;
+    # clones the repo root, which must hold .agents/skills/). Set SKILLS_REPO_URL
+    # to a credentialed URL, e.g. https://oauth2:$GITLAB_TOKEN@gitlab.com/org/repo:
+    #   if [ -n "$SKILLS_REPO_URL" ]; then
+    #     git clone --depth 1 --branch "${SKILLS_REF:-main}" "$SKILLS_REPO_URL" ./skills
+    #     export SKILLS_DIR="$CI_PROJECT_DIR/skills"
+    #   fi
   script:
     # `flue run` input must be an object with a string "message"; the skill
     # picks the issue key out of it.

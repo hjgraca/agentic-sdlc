@@ -64,8 +64,8 @@ const sandbox = local({ cwd });
 ```
 
 - **Detached & separate release cycle.** Skills are a directory, not code. In
-  production, fetch the Skills Project (e.g. an init container that `git clone`s
-  it) and set `SKILLS_DIR` to point there — no rebuild. See
+  production, fetch the Skills Project (e.g. an init container that runs
+  `skills add`) and set `SKILLS_DIR` to point there — no rebuild. See
   [Skills in production](#skills-in-production) below.
 - **Runtime-resolved.** `cwd` is read from `process.env` at boot, so the same
   build reads different skills per environment.
@@ -213,18 +213,19 @@ Skills are **fetched at boot from their own repo**, not baked into the agent
 image — so they're on a separate release cycle. The base `deployment.yaml` wires
 this with an init container:
 
-- A `fetch-skills` init container `git clone`s the Skills Project (a repo whose
-  root holds `.agents/skills/`) into a shared `emptyDir` volume.
+- A `fetch-skills` init container (a `node:22` image) runs
+  `npx skills add <repo> -a universal` ([skills.sh](https://skills.sh)) into a
+  shared `emptyDir` volume. `-a universal` installs straight to `.agents/skills/`.
 - The app container mounts that volume and sets `SKILLS_DIR=/skills`. Flue
   discovers `/skills/.agents/skills/` at `init()`.
 
-Point it at your repo + ref via the overlay (see `k8s/local/`); the init
-container re-runs on every pod start, so a **rolling restart picks up new skills
-with no app rebuild**. If the skills repo is **private**, the init container
-reuses `GITLAB_TOKEN` from the Secret (injected into the clone URL); it's
-optional, so a public repo needs no token. A skills.sh registry alternative
-works too (a node image running `npx skills add <git-url> -a universal`, which
-installs straight to `.agents/skills/`) — see
+Point it at your repo via the overlay (set `SKILLS_REPO` to `org/path`; see
+`k8s/local/`); the init container re-runs on every pod start, so a **rolling
+restart picks up new skills with no app rebuild**. If the skills repo is
+**private**, the init container authenticates git with `GITLAB_TOKEN` from the
+Secret via a one-line `git config … insteadOf` (skills.sh strips credentials
+from the URL, so the token is given to git below the CLI); it's optional, so a
+public repo needs no token. A plain `git clone` alternative is documented in
 [docs/adding-skills.md](../../docs/adding-skills.md).
 
 > **Why not a ConfigMap?** A ConfigMap caps at ~1 MB and flattens directory

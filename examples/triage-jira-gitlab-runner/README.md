@@ -30,7 +30,7 @@ The issue key arrives as a CI variable (`$ISSUE_KEY`); `flue run` is the entry
 point. No webhook server, no load balancer, no Kubernetes.
 
 ```yaml
-# .gitlab-ci.yml (ships in this folder)
+# .gitlab-ci.yml (ships in this folder) — the job that runs `flue run`
 triage:
   image: node:22
   timeout: 30 minutes
@@ -39,17 +39,19 @@ triage:
   before_script:
     - npm ci
     # Optional: fetch the Skills Project from its own repo (separate release
-    # cycle). Set SKILLS_REPO/SKILLS_REF as CI/CD vars; omit to use the skills
-    # committed in this repo.
-    - if [ -n "$SKILLS_REPO" ]; then git clone --depth 1 --branch "${SKILLS_REF:-main}" "$SKILLS_REPO" ./skills && export SKILLS_DIR="$CI_PROJECT_DIR/skills"; fi
+    # cycle) via skills.sh. Set SKILLS_REPO=org/path as a CI/CD var; omit to use
+    # the skills committed in this repo.
+    - |
+      if [ -n "$SKILLS_REPO" ]; then
+        git config --global url."https://oauth2:${GITLAB_TOKEN}@gitlab.com/".insteadOf "https://gitlab.com/"
+        mkdir -p ./skills && (cd ./skills && npx -y skills add "https://gitlab.com/${SKILLS_REPO}" -a universal -y)
+        export SKILLS_DIR="$CI_PROJECT_DIR/skills"
+      fi
   script:
     - ./node_modules/.bin/flue run jira-triage --input "{\"message\":\"Triage Jira issue $ISSUE_KEY.\"}"
-  variables:
-    # masked CI/CD variables (Settings → CI/CD → Variables):
-    #   JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN, GITLAB_TOKEN,
-    #   AWS_BEARER_TOKEN_BEDROCK, AWS_REGION
-    #   (optional) SKILLS_REPO, SKILLS_REF
-    GIT_DEPTH: "1"
+  # CI/CD variables (Settings → CI/CD → Variables): JIRA_BASE_URL, JIRA_EMAIL,
+  # JIRA_API_TOKEN, GITLAB_TOKEN, AWS_BEARER_TOKEN_BEDROCK, AWS_REGION; optional
+  # SKILLS_REPO. See the committed .gitlab-ci.yml for the git clone alternative.
 ```
 
 ## Shape
@@ -99,15 +101,18 @@ the skill, applies the Confluence standards, and posts a comment back.
 
 The skill committed in this repo's `.agents/skills/` is the default. To run the
 skills from their own repo on a **separate release cycle** (without changing this
-agent), set the optional CI/CD variables `SKILLS_REPO` (a git repo whose root
-holds `.agents/skills/`) and `SKILLS_REF` (a tag/sha to pin). The `before_script`
-clones it into the workspace and exports `SKILLS_DIR`; Flue discovers
-`$SKILLS_DIR/.agents/skills/` at init. No rebuild — the next pipeline picks up
-the pinned ref. (skills.sh registry alternative — use `-a universal` so it
-installs straight to `.agents/skills/`; see
-[docs/adding-skills.md](../../docs/adding-skills.md).)
+agent), set the optional CI/CD variable `SKILLS_REPO` (the repo path, `org/path`).
+The `before_script` installs it with `skills add -a universal` — which lands
+straight in `.agents/skills/` — and exports `SKILLS_DIR`; Flue discovers
+`$SKILLS_DIR/.agents/skills/` at init. No rebuild — the next pipeline picks it
+up. The repo is private, so the token reaches git via a one-line
+`git config … insteadOf` (skills.sh strips credentials from the URL). A plain
+`git clone` alternative is in the committed `.gitlab-ci.yml` and
+[docs/adding-skills.md](../../docs/adding-skills.md).
+
 This is the runner counterpart to `triage-jira-k8s`'s init-container fetch — same
-`SKILLS_DIR` contract, different delivery for a one-shot job.
+`SKILLS_DIR` contract, same skills.sh delivery, just a one-shot job instead of a
+long-running pod.
 
 ## Trigger drives deploy
 

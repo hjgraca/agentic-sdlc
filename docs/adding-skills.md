@@ -44,55 +44,67 @@ Read `references/checklist.md` and make sure your output satisfies it.
 Drop a folder under the example's `.agents/skills/`. Flue discovers it on the
 next run. This is how the examples ship their skills.
 
-### 2. Fetch at runtime (production, no rebuild)
+### 2. Fetch at runtime with skills.sh (production, no rebuild)
 The agent's sandbox cwd is `process.env.SKILLS_DIR ?? process.cwd()`, and Flue
 discovers skills from `<cwd>/.agents/skills/`. Materialize your skills directory
 somewhere at boot and point `SKILLS_DIR` at it; your skills override what ships
-in the image. How each deploy target does it:
-
-- **Kubernetes** — an init container `git clone`s (or `skills add`s) the Skills
-  Project into a shared `emptyDir`, and the app container sets `SKILLS_DIR` to
-  it. See [`triage-jira-k8s/k8s/base/deployment.yaml`](../examples/triage-jira-k8s/k8s/base/deployment.yaml).
-- **CI runner** — a `before_script` step fetches the skills into the workspace
-  and exports `SKILLS_DIR` before `flue run`. See
-  [`triage-jira-gitlab-runner/.gitlab-ci.yml`](../examples/triage-jira-gitlab-runner/.gitlab-ci.yml).
-
-> **Not a ConfigMap.** A ConfigMap caps at ~1 MB and flattens directory
-> structure, so it can't carry a skill's `references/` subtree. Use an
-> `emptyDir` populated by an init container instead.
-
-### 3. Install from a registry (skills.sh)
-[skills.sh](https://skills.sh) distributes skills as git repos. Its `add` command
-accepts a GitHub `owner/repo` shorthand **or any git URL — including a GitLab
-repo**, so the same Skills Project repo we use everywhere else is a valid source.
-
-**Install with `-a universal`** — that target writes to exactly `.agents/skills/`,
-which is the path Flue discovers, so no bridge is needed:
+in the image. The examples do this with [skills.sh](https://skills.sh), whose
+`add` command accepts a GitHub `owner/repo` shorthand **or any git URL —
+including a private GitLab repo** — so the same Skills Project repo is the source
+everywhere:
 
 ```bash
-npx skills add https://gitlab.com/<org>/<repo> -a universal -s '*' --copy -y
+npx skills add https://gitlab.com/<org>/<repo> -a universal -y
 export SKILLS_DIR="$PWD"   # Flue discovers $PWD/.agents/skills/
 ```
 
-Use `--copy` so real files (not symlinks into a throwaway clone) land in the dir,
-with the skill's `references/` subtree.
+**Use `-a universal`.** `SKILLS_DIR` is a *base path* — Flue always appends the
+literal `.agents/skills` to it (not configurable). skills.sh installs to a folder
+named for the `-a` agent: `universal` (and `promptscript`) write to
+`.agents/skills/`, but `pi` → `.pi/skills/`, `claude-code` → `.claude/skills/`,
+`eve` → `agent/skills/`. Only `universal` lines up with Flue out of the box;
+there is no `--dir` flag to override it. (No `--copy` needed — when no agent is
+auto-detected, skills.sh writes real files, not symlinks.)
 
-**Why the agent target matters.** `SKILLS_DIR` is a *base path* — Flue always
-appends the literal `.agents/skills` to it (it is not configurable). skills.sh
-installs to a folder named for the `-a` agent: `universal` (and `promptscript`)
-use `.agents/skills/`, but `pi` → `.pi/skills/`, `claude-code` → `.claude/skills/`,
-`eve` → `agent/skills/`. Only `universal` lines up with Flue out of the box; pick
-any other and you'd have to symlink `.agents/skills` at its install dir. There is
-no `--dir` flag to override the location. **Use `-a universal`.**
+**Private-repo auth.** skills.sh shells out to `git clone` but **strips any
+`oauth2:token@` from the URL** before cloning, so a credentialed URL does not
+work. Instead give git the credential *below* the CLI with an `insteadOf`
+rewrite, using a token already in the environment:
 
-**Private repos rely on ambient git auth.** skills.sh shells out to `git clone`
-with no token flag, so a private GitLab repo only works where git is already
-authenticated (a credential helper, an `oauth2:$TOKEN@` remote, or an SSH key).
-In CI/k8s, prefer the plain `git clone` paths in option 2 (they take
-`GITLAB_TOKEN` explicitly); reserve skills.sh for local or public-registry use.
+```bash
+git config --global url."https://oauth2:${GITLAB_TOKEN}@gitlab.com/".insteadOf "https://gitlab.com/"
+npx skills add "https://gitlab.com/<org>/<repo>" -a universal -y
+```
 
-Run the install at deploy time (CI step or init container) so the agent discovers
-the skills at boot. No code change, separate release cycle from the agent.
+How each deploy target wires this (run at boot, so a restart/next pipeline picks
+up new skills with no rebuild):
+
+- **Kubernetes** — a `node:22` init container runs the two lines above into a
+  shared `emptyDir`; the app container sets `SKILLS_DIR=/skills`. The token comes
+  from the Secret. See [`triage-jira-k8s/k8s/base/deployment.yaml`](../examples/triage-jira-k8s/k8s/base/deployment.yaml).
+- **CI runner** — a `before_script` step runs them in the workspace and exports
+  `SKILLS_DIR` before `flue run`; the token is a CI/CD variable. See
+  [`triage-jira-gitlab-runner/.gitlab-ci.yml`](../examples/triage-jira-gitlab-runner/.gitlab-ci.yml).
+
+> **On Kubernetes, not a ConfigMap.** A ConfigMap caps at ~1 MB and flattens
+> directory structure, so it can't carry a skill's `references/` subtree. The
+> `emptyDir` populated by the init container has neither limit.
+
+### 3. Plain `git clone` (no skills.sh)
+If you'd rather not depend on skills.sh, clone a repo whose **root holds
+`.agents/skills/`** directly and point `SKILLS_DIR` at the checkout. This takes a
+credentialed URL straight (nothing strips it) and lets you pin a tag/sha:
+
+```bash
+git clone --depth 1 --branch <tag> "https://oauth2:${GITLAB_TOKEN}@gitlab.com/<org>/<repo>" ./skills
+export SKILLS_DIR="$PWD/skills"
+```
+
+Both example deploy targets ship this as a commented alternative next to the
+skills.sh path. The trade-off: `git clone` pins a ref and needs no extra tool,
+but the repo layout must already match `.agents/skills/`; skills.sh discovers
+skills wherever they live in the source repo and normalizes them into
+`.agents/skills/`.
 
 ## Tools vs skills
 
@@ -112,26 +124,27 @@ the triage must contain, by editing that markdown — not the TypeScript.
 
 The override mechanism is one contract — *materialize `.agents/skills/`, point
 `SKILLS_DIR` at its parent* — and every delivery path below was proven
-end-to-end against the live triage agent. The test: a separate skills repo whose
-`SKILL.md` prepends a unique marker to the posted Jira comment, so the comment
-itself proves which skill ran. In all four, the **agent build was unchanged** —
-only the injected skills differed.
+end-to-end against the live triage agent. The test: a separate private GitLab
+skills repo whose `SKILL.md` prepends a unique marker to the posted Jira comment,
+so the comment itself proves which skill ran. In every case the **agent build
+was unchanged** — only the injected skills differed.
 
-| Path | How skills are delivered | Proof |
+| Path | How skills are delivered (skills.sh, `-a universal`) | Proof |
 |---|---|---|
-| **Local** | `SKILLS_DIR=/path/to/skills flue run` | default run had no marker; override run did |
-| **GitLab runner** | `before_script` clones the skills repo, exports `SKILLS_DIR` | job log shows `Cloning into './skills'`; comment carried the marker |
-| **Kubernetes** | `fetch-skills` init container clones into an `emptyDir`; app sets `SKILLS_DIR=/skills` | init container exits 0, `/skills/.agents/skills/` mounted; webhook triage carried the marker |
-| **skills.sh** | `skills add <git-url> -a universal` (installs straight to `.agents/skills/`) | triage run via that dir carried the marker |
+| **Local** | `skills add` into a dir; `SKILLS_DIR=<dir> flue run` | default run had no marker; override run did |
+| **GitLab runner** | `before_script` runs `skills add`, exports `SKILLS_DIR` | job log shows clone + `Installing all 1 skills` → `Done!`; comment carried the marker |
+| **Kubernetes** | `node:22` init container runs `skills add` into an `emptyDir`; app sets `SKILLS_DIR=/skills` | init container exits 0, `/skills/.agents/skills/` mounted; webhook triage carried the marker |
 
 Key facts each path confirmed:
 
-- **A private GitLab repo works as the skills source** in all paths; the clone
-  just needs auth (explicit `GITLAB_TOKEN` in CI/k8s, ambient git for skills.sh).
-- **`emptyDir` + init container, never a ConfigMap** — the ~1 MB cap and flattened
-  layout can't carry a skill's `references/` subtree.
-- **A rolling restart re-runs the init container**, so new skills land with no
-  app rebuild — the separate-release-cycle goal.
-- **skills.sh works with `-a universal`**, which installs straight to
-  `.agents/skills/`; other agent targets (`pi`, `claude-code`, `eve`) use a
-  different folder and would need a symlink, and there is no `--dir` flag.
+- **A private GitLab repo works as the skills source** in all paths, authenticated
+  by a one-line `git config … insteadOf` using `GITLAB_TOKEN` (skills.sh strips a
+  token from the URL, so it must be given to git below the CLI).
+- **`-a universal` installs straight to `.agents/skills/`** — Flue's discovery
+  path — with the `references/` subtree intact; no symlink, no `--dir` flag.
+- **A rolling restart (k8s) / next pipeline (runner) re-runs the fetch**, so new
+  skills land with no app rebuild — the separate-release-cycle goal.
+- **On Kubernetes, `emptyDir` + init container, never a ConfigMap** — the ~1 MB
+  cap and flattened layout can't carry a skill's `references/` subtree.
+- A plain **`git clone`** is the documented alternative when you'd rather pin a
+  tag/sha or avoid the skills.sh dependency.
