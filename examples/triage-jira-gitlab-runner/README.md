@@ -38,12 +38,17 @@ triage:
     - if: '$CI_PIPELINE_SOURCE == "trigger" && $ISSUE_KEY'
   before_script:
     - npm ci
+    # Optional: fetch the Skills Project from its own repo (separate release
+    # cycle). Set SKILLS_REPO/SKILLS_REF as CI/CD vars; omit to use the skills
+    # committed in this repo.
+    - if [ -n "$SKILLS_REPO" ]; then git clone --depth 1 --branch "${SKILLS_REF:-main}" "$SKILLS_REPO" ./skills && export SKILLS_DIR="$CI_PROJECT_DIR/skills"; fi
   script:
     - ./node_modules/.bin/flue run jira-triage --input "{\"message\":\"Triage Jira issue $ISSUE_KEY.\"}"
   variables:
     # masked CI/CD variables (Settings → CI/CD → Variables):
     #   JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN, GITLAB_TOKEN,
     #   AWS_BEARER_TOKEN_BEDROCK, AWS_REGION
+    #   (optional) SKILLS_REPO, SKILLS_REF
     GIT_DEPTH: "1"
 ```
 
@@ -89,6 +94,18 @@ the skill, applies the Confluence standards, and posts a comment back.
 2. Create a pipeline trigger token (Settings → CI/CD → Pipeline trigger tokens).
 3. Point the Jira automation's "Send web request" at the trigger API URL above,
    passing `variables[ISSUE_KEY]={{issue.key}}`.
+
+### Skills in production
+
+The skill committed in this repo's `.agents/skills/` is the default. To run the
+skills from their own repo on a **separate release cycle** (without changing this
+agent), set the optional CI/CD variables `SKILLS_REPO` (a git repo whose root
+holds `.agents/skills/`) and `SKILLS_REF` (a tag/sha to pin). The `before_script`
+clones it into the workspace and exports `SKILLS_DIR`; Flue discovers
+`$SKILLS_DIR/.agents/skills/` at init. No rebuild — the next pipeline picks up
+the pinned ref. (Registry alternative: `npx @skills-sh/cli add <owner>/<repo>`.)
+This is the runner counterpart to `triage-jira-k8s`'s init-container fetch — same
+`SKILLS_DIR` contract, different delivery for a one-shot job.
 
 ## Trigger drives deploy
 

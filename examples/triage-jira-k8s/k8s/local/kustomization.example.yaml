@@ -40,3 +40,15 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/env/3/value
         value: bot@your-org.com
+  # Your Skills Project (separate repo, its own release cycle). The base ships a
+  # placeholder; point the fetch-skills init container at your repo + ref.
+  - target:
+      kind: Deployment
+      name: flue-triage
+    patch: |
+      - op: replace
+        path: /spec/template/spec/initContainers/0/env/0/value
+        value: https://gitlab.com/your-org/triage-skills.git
+      - op: replace
+        path: /spec/template/spec/initContainers/0/env/1/value
+        value: v1.0.0

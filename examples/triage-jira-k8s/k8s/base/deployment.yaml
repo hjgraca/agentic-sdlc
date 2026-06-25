@@ -37,6 +37,37 @@ spec:
         app: flue-triage
     spec:
       serviceAccountName: flue-triage
+      volumes:
+        # The Skills Project, materialized at boot into a shared scratch volume.
+        # emptyDir (not a ConfigMap): a ConfigMap caps at ~1MB and flattens the
+        # directory, so it can't carry a skill's references/ subtree. emptyDir
+        # has no size limit and preserves the full .agents/skills/ tree.
+        - name: skills
+          emptyDir: {}
+      initContainers:
+        # Fetch skills from their OWN repo/registry — a separate release cycle
+        # from the agent image. Pin a tag/sha for reproducibility. Re-runs on
+        # every pod start, so a rolling restart picks up new skills with no app
+        # rebuild. The overlay patches in your real skills source (see local/).
+        - name: fetch-skills
+          image: node:22-slim
+          command:
+            - sh
+            - -c
+            # Default: clone a git repo whose root holds .agents/skills/.
+            #   Alternative (skills.sh registry):
+            #     npx -y @skills-sh/cli add <owner>/<repo> --dir /skills/.agents/skills
+            - >-
+              git clone --depth 1 --branch "$SKILLS_REF"
+              "$SKILLS_REPO" /skills
+          env:
+            - name: SKILLS_REPO
+              value: "https://gitlab.com/your-org/triage-skills.git"
+            - name: SKILLS_REF
+              value: "main"
+          volumeMounts:
+            - name: skills
+              mountPath: /skills
       containers:
         - name: flue-triage
           image: <YOUR_REGISTRY>/flue-triage:v1
@@ -56,6 +87,15 @@ spec:
               value: "bot@your-org.com"
             - name: GITLAB_BASE_URL
               value: "https://gitlab.com/api/v4"
+            # Point Flue's sandbox cwd at the fetched skills. Flue discovers
+            # <SKILLS_DIR>/.agents/skills/ at init(). Keep this LAST so the
+            # overlay's index-based env patches (JIRA_BASE_URL=2, JIRA_EMAIL=3)
+            # stay valid.
+            - name: SKILLS_DIR
+              value: "/skills"
+          volumeMounts:
+            - name: skills
+              mountPath: /skills
           # TCP probe: Flue's server has no GET route at `/` (returns 404), so an
           # httpGet probe would never pass. Port-open is the correct readiness
           # signal for this webhook server.

@@ -209,11 +209,26 @@ kubectl -n flue-triage run trig --rm -i --restart=Never \
 
 ### Skills in production
 
-Skills ship in the image (`.agents/skills/`, copied by the Dockerfile). To
-override them without a rebuild, mount the Skills Project so
-`<SKILLS_DIR>/.agents/skills/` exists (e.g. a ConfigMap volume, or an init
-container running `skills add <owner/repo>` into it) and set `SKILLS_DIR`. The
-agent's sandbox uses that cwd, and Flue discovers the skills from there at init.
+Skills are **fetched at boot from their own repo**, not baked into the agent
+image — so they're on a separate release cycle. The base `deployment.yaml` wires
+this with an init container:
+
+- A `fetch-skills` init container `git clone`s the Skills Project (a repo whose
+  root holds `.agents/skills/`) into a shared `emptyDir` volume.
+- The app container mounts that volume and sets `SKILLS_DIR=/skills`. Flue
+  discovers `/skills/.agents/skills/` at `init()`.
+
+Point it at your repo + ref via the overlay (see `k8s/local/`); the init
+container re-runs on every pod start, so a **rolling restart picks up new skills
+with no app rebuild**. The skills-from-registry alternative is a one-line swap of
+the init command (`npx @skills-sh/cli add <owner>/<repo>`) — see the comment in
+`deployment.yaml`.
+
+> **Why not a ConfigMap?** A ConfigMap caps at ~1 MB and flattens directory
+> structure, so it can't carry a skill's `references/` subtree. `emptyDir` +
+> init container has no size limit and preserves the full tree. The image still
+> bakes `.agents/skills/` (via the Dockerfile) as a fallback for local
+> `flue run`, but in k8s `SKILLS_DIR` overrides it.
 
 ## Docs
 

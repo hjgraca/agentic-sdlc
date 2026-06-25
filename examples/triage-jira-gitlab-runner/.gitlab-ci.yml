@@ -14,6 +14,17 @@ triage:
     - if: '$CI_PIPELINE_SOURCE == "trigger" && $ISSUE_KEY'
   before_script:
     - npm ci
+    # Fetch the Skills Project from its OWN repo — separate release cycle from
+    # this agent. Pin SKILLS_REF (a tag/sha) for reproducibility. Then point
+    # Flue's sandbox cwd at it; Flue discovers $SKILLS_DIR/.agents/skills/ at
+    # init(). Set SKILLS_REPO / SKILLS_REF as CI/CD variables. Omit all three
+    # to fall back to the .agents/skills/ committed in this repo.
+    # Registry alternative: npx -y @skills-sh/cli add <owner>/<repo> --dir ./skills/.agents/skills
+    - |
+      if [ -n "$SKILLS_REPO" ]; then
+        git clone --depth 1 --branch "${SKILLS_REF:-main}" "$SKILLS_REPO" ./skills
+        export SKILLS_DIR="$CI_PROJECT_DIR/skills"
+      fi
   script:
     # `flue run` input must be an object with a string "message"; the skill
     # picks the issue key out of it.

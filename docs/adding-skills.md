@@ -44,11 +44,22 @@ Read `references/checklist.md` and make sure your output satisfies it.
 Drop a folder under the example's `.agents/skills/`. Flue discovers it on the
 next run. This is how the examples ship their skills.
 
-### 2. Mount at runtime (production, no rebuild)
+### 2. Fetch at runtime (production, no rebuild)
 The agent's sandbox cwd is `process.env.SKILLS_DIR ?? process.cwd()`, and Flue
-discovers skills from `<cwd>/.agents/skills/`. Mount your skills directory and
-point `SKILLS_DIR` at it — a Kubernetes ConfigMap volume, a baked image layer,
-or an init container. Your skills override what ships in the image.
+discovers skills from `<cwd>/.agents/skills/`. Materialize your skills directory
+somewhere at boot and point `SKILLS_DIR` at it; your skills override what ships
+in the image. How each deploy target does it:
+
+- **Kubernetes** — an init container `git clone`s (or `skills add`s) the Skills
+  Project into a shared `emptyDir`, and the app container sets `SKILLS_DIR` to
+  it. See [`triage-jira-k8s/k8s/base/deployment.yaml`](../examples/triage-jira-k8s/k8s/base/deployment.yaml).
+- **CI runner** — a `before_script` step fetches the skills into the workspace
+  and exports `SKILLS_DIR` before `flue run`. See
+  [`triage-jira-gitlab-runner/.gitlab-ci.yml`](../examples/triage-jira-gitlab-runner/.gitlab-ci.yml).
+
+> **Not a ConfigMap.** A ConfigMap caps at ~1 MB and flattens directory
+> structure, so it can't carry a skill's `references/` subtree. Use an
+> `emptyDir` populated by an init container instead.
 
 ### 3. Install from a registry (skills.sh)
 Skills are distributable as git repos via [skills.sh](https://skills.sh):
