@@ -62,14 +62,39 @@ in the image. How each deploy target does it:
 > `emptyDir` populated by an init container instead.
 
 ### 3. Install from a registry (skills.sh)
-Skills are distributable as git repos via [skills.sh](https://skills.sh):
+[skills.sh](https://skills.sh) distributes skills as git repos. Its `add` command
+accepts a GitHub `owner/repo` shorthand **or any git URL — including a GitLab
+repo**, so the same Skills Project repo we use everywhere else is a valid source:
 
 ```bash
-skills add <owner>/<repo> --dir "$SKILLS_DIR/.agents/skills"
+npx skills add https://gitlab.com/<org>/<repo> -a pi -s '*' --copy -y
 ```
 
-Run this at deploy time (CI step or init container) so the agent discovers them
-at boot. No code change, separate release cycle from the agent.
+**Two gotchas, both verified against this repo:**
+
+1. **It installs to a per-agent directory, not `.agents/skills/`.** There is no
+   `--dir` flag; `skills add` writes to an agent-named folder chosen by `-a`
+   (e.g. `.pi/skills/`, `.claude/skills/`, eve's `agent/skills/`). Flue discovers
+   only `<SKILLS_DIR>/.agents/skills/` (hardcoded). So bridge the two with a
+   symlink after install:
+
+   ```bash
+   npx skills add https://gitlab.com/<org>/<repo> -a pi -s '*' --copy -y
+   mkdir -p .agents && ln -s ../.pi/skills .agents/skills   # Flue now discovers them
+   export SKILLS_DIR="$PWD"
+   ```
+
+   Use `--copy` so real files (not symlinks into a clone) land in the agent dir,
+   and the skill's `references/` subtree comes along.
+
+2. **Private repos rely on ambient git auth.** skills.sh shells out to `git
+   clone` with no token flag, so a private GitLab repo only works where git is
+   already authenticated (a credential helper, an `oauth2:$TOKEN@` remote, or an
+   SSH key). In CI/k8s, prefer the plain `git clone` paths in option 2 (they take
+   `GITLAB_TOKEN` explicitly) and reserve skills.sh for local/registry use.
+
+Run the install at deploy time (CI step or init container) so the agent discovers
+the skills at boot. No code change, separate release cycle from the agent.
 
 ## Tools vs skills
 
@@ -84,3 +109,30 @@ See [`examples/triage-jira-k8s/.agents/skills/jira-triage/`](../examples/triage-
 — a skill whose body lists the GitLab projects to search and references a
 `triage-checklist.md`. A customer changes which projects are triaged, or what
 the triage must contain, by editing that markdown — not the TypeScript.
+
+## Verified in action
+
+The override mechanism is one contract — *materialize `.agents/skills/`, point
+`SKILLS_DIR` at its parent* — and every delivery path below was proven
+end-to-end against the live triage agent. The test: a separate skills repo whose
+`SKILL.md` prepends a unique marker to the posted Jira comment, so the comment
+itself proves which skill ran. In all four, the **agent build was unchanged** —
+only the injected skills differed.
+
+| Path | How skills are delivered | Proof |
+|---|---|---|
+| **Local** | `SKILLS_DIR=/path/to/skills flue run` | default run had no marker; override run did |
+| **GitLab runner** | `before_script` clones the skills repo, exports `SKILLS_DIR` | job log shows `Cloning into './skills'`; comment carried the marker |
+| **Kubernetes** | `fetch-skills` init container clones into an `emptyDir`; app sets `SKILLS_DIR=/skills` | init container exits 0, `/skills/.agents/skills/` mounted; webhook triage carried the marker |
+| **skills.sh** | `skills add <git-url>` + symlink bridge into `.agents/skills/` | triage run via the bridged dir carried the marker |
+
+Key facts each path confirmed:
+
+- **A private GitLab repo works as the skills source** in all paths; the clone
+  just needs auth (explicit `GITLAB_TOKEN` in CI/k8s, ambient git for skills.sh).
+- **`emptyDir` + init container, never a ConfigMap** — the ~1 MB cap and flattened
+  layout can't carry a skill's `references/` subtree.
+- **A rolling restart re-runs the init container**, so new skills land with no
+  app rebuild — the separate-release-cycle goal.
+- **skills.sh needs the symlink bridge** because it installs to `.pi/skills/` /
+  `.claude/skills/`, not Flue's `.agents/skills/`, and has no `--dir` flag.

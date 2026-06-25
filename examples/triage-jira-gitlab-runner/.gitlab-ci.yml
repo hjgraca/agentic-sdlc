@@ -19,7 +19,8 @@ triage:
     # Flue's sandbox cwd at it; Flue discovers $SKILLS_DIR/.agents/skills/ at
     # init(). Set SKILLS_REPO / SKILLS_REF as CI/CD variables. Omit all three
     # to fall back to the .agents/skills/ committed in this repo.
-    # Registry alternative: npx -y @skills-sh/cli add <owner>/<repo> --dir ./skills/.agents/skills
+    # skills.sh alternative (needs a symlink bridge into .agents/skills/; see
+    # docs/adding-skills.md): npx -y skills add <git-url> -a pi -s '*' --copy -y
     - |
       if [ -n "$SKILLS_REPO" ]; then
         git clone --depth 1 --branch "${SKILLS_REF:-main}" "$SKILLS_REPO" ./skills

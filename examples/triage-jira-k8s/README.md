@@ -64,9 +64,9 @@ const sandbox = local({ cwd });
 ```
 
 - **Detached & separate release cycle.** Skills are a directory, not code. In
-  production, mount the Skills Project (e.g. an init container running
-  `skills add <owner/repo>` from skills.sh) and set `SKILLS_DIR` to point there —
-  no rebuild.
+  production, fetch the Skills Project (e.g. an init container that `git clone`s
+  it) and set `SKILLS_DIR` to point there — no rebuild. See
+  [Skills in production](#skills-in-production) below.
 - **Runtime-resolved.** `cwd` is read from `process.env` at boot, so the same
   build reads different skills per environment.
 - **Dynamic.** Bodies are reread per activation, so a changed `SKILL.md` takes
@@ -222,9 +222,9 @@ Point it at your repo + ref via the overlay (see `k8s/local/`); the init
 container re-runs on every pod start, so a **rolling restart picks up new skills
 with no app rebuild**. If the skills repo is **private**, the init container
 reuses `GITLAB_TOKEN` from the Secret (injected into the clone URL); it's
-optional, so a public repo needs no token. The skills-from-registry alternative
-is a one-line swap of the init command (`npx @skills-sh/cli add <owner>/<repo>`,
-on a node image) — see the comment in `deployment.yaml`.
+optional, so a public repo needs no token. A skills.sh registry alternative
+works too (a node image running `npx skills add <git-url>` plus a symlink bridge
+into `.agents/skills/`) — see [docs/adding-skills.md](../../docs/adding-skills.md).
 
 > **Why not a ConfigMap?** A ConfigMap caps at ~1 MB and flattens directory
 > structure, so it can't carry a skill's `references/` subtree. `emptyDir` +
