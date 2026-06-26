@@ -1,0 +1,34 @@
+# CI for the example apps: typecheck, build, and unit tests on every push/PR.
+# Separate from triage.yml (the runtime agent trigger) — this gates code health,
+# that one runs the agent. Matrix over the examples that ship a test script so
+# adding a new example is one line here. (matrix.example is workflow-controlled,
+# not external input, and is only used in paths — never in a run: shell string.)
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        example:
+          - triage-github-actions
+    defaults:
+      run:
+        working-directory: examples/${{ matrix.example }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: examples/${{ matrix.example }}/package-lock.json
+      - run: npm ci
+      - run: ./node_modules/.bin/tsc --noEmit
+      - run: ./node_modules/.bin/flue build --target node
+      - run: npm test

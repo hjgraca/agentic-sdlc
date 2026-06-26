@@ -110,7 +110,10 @@ AGENTS.md                                  # agent framing
 .github/workflows/triage.yml                # the gated workflow that runs `flue run`
 src/
 ├── agents/github-triage.ts                # model + local() sandbox + tools — NO channel
-└── tools/github/github.ts                 # outbound GitHub tools (@octokit/rest)
+└── tools/github/
+    ├── github.ts                          # outbound GitHub tools (@octokit/rest)
+    ├── helpers.ts                          # pure helpers (repo parsing, search envelope)
+    └── helpers.test.ts                     # unit tests (node:test, no extra deps)
 ```
 
 GitHub is both work source and code host, so a single `src/tools/github/`
@@ -130,6 +133,19 @@ cp .env.example .env   # Bedrock uses AWS_PROFILE (no key); add a GITHUB_TOKEN (
 `flue run` input must be an object with a string `message`; the skill parses the
 `owner/repo` and issue number out of it, reads the issue, searches the repo,
 applies the repo's conventions, and posts a comment back.
+
+### Tests
+
+The pure tool helpers (repo-coordinate parsing, the search-result truncation
+envelope) have unit tests that run on Node's built-in test runner — no extra
+dependencies:
+
+```bash
+npm test
+```
+
+The repo-root `.github/workflows/ci.yml` runs `tsc`, the Flue build, and these
+tests on every push and PR.
 
 ## Deploy
 

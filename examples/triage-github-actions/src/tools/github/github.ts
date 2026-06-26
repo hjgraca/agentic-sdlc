@@ -1,6 +1,7 @@
 import { defineTool } from '@flue/runtime';
 import { Octokit } from '@octokit/rest';
 import * as v from 'valibot';
+import { searchEnvelope, splitRepo } from './helpers.ts';
 
 /**
  * GitHub tools. GitHub is both the work source (the issue being triaged) and
@@ -26,25 +27,10 @@ const octokit = new Octokit({
 	...(process.env.GITHUB_API_URL ? { baseUrl: process.env.GITHUB_API_URL } : {}),
 });
 
-/**
- * Split an "owner/repo" string into Octokit's { owner, repo }.
- *
- * Validates strictly: the value comes from the skill parsing free text out of
- * the run input, so a pasted URL, an extra path segment, or a missing slash are
- * realistic. Without this guard those silently yield a wrong or `undefined`
- * coordinate and every tool fails deep inside Octokit with an opaque error. We
- * throw a clear message instead; each tool's `run` catch returns it to the
- * model as actionable output.
- */
-function splitRepo(repo: string): { owner: string; repo: string } {
-	const parts = repo.split('/');
-	if (parts.length !== 2 || !parts[0] || !parts[1]) {
-		throw new Error(
-			`Invalid repo "${repo}": expected "owner/repo" (exactly one slash, no empty segments).`,
-		);
-	}
-	return { owner: parts[0], repo: parts[1] };
-}
+// Pure helpers (repo parsing + search envelope) live in ./helpers.ts so this
+// module exports only tools — the agent does `Object.values(githubTools)` to
+// build its tool list, so a non-tool export here would be swept in as a tool.
+// helpers.ts is where the unit tests point (see helpers.test.ts).
 
 export const getIssue = defineTool({
 	name: 'github_get_issue',
@@ -125,16 +111,8 @@ export const searchCode = defineTool({
 				q: `${input.query} repo:${input.repo}`,
 				per_page: 20,
 			});
-			// Surface the true match count and a truncation flag — a bare array
-			// hides whether 20 results are all of them or just page 1, so the
-			// model can't tell complete coverage from a silent cap.
 			const items = data.items.map((m) => ({ path: m.path, url: m.html_url }));
-			return JSON.stringify({
-				total_count: data.total_count,
-				returned: items.length,
-				truncated: data.total_count > items.length,
-				items,
-			});
+			return JSON.stringify(searchEnvelope(data.total_count, items));
 		} catch (err) {
 			return `GitHub code search failed: ${String(err)}`;
 		}
@@ -157,20 +135,13 @@ export const searchPullRequests = defineTool({
 				q: `${input.query} repo:${input.repo} is:pr${state}`,
 				per_page: 20,
 			});
-			// Same envelope as github_search_code: carry total_count + truncated
-			// so a partial result set is never mistaken for full coverage.
 			const items = data.items.map((p) => ({
 				number: p.number,
 				title: p.title,
 				state: p.state,
 				url: p.html_url,
 			}));
-			return JSON.stringify({
-				total_count: data.total_count,
-				returned: items.length,
-				truncated: data.total_count > items.length,
-				items,
-			});
+			return JSON.stringify(searchEnvelope(data.total_count, items));
 		} catch (err) {
 			return `GitHub PR search failed: ${String(err)}`;
 		}
