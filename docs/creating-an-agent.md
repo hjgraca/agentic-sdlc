@@ -1,5 +1,10 @@
 # Creating an agent from scratch
 
+> 🤖 **Coding agents:** there is an agent-facing checklist version of this with
+> the gotchas inline — the `create-agent` skill (`.claude/skills/create-agent/`),
+> which auto-loads when someone asks to "create an agent / bot". This doc is the
+> human walkthrough.
+
 This guide builds a new agent the way the examples in this repo are built. It's
 **Flue-first** — the examples use [Flue](https://flueframework.com) — but the
 *shape* (an agent = framing + a skill + per-provider tools + a trigger) is
