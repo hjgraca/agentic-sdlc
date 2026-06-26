@@ -81,9 +81,10 @@ Mirror the closest example. The shape is always:
      provider is Bedrock — do NOT default to `anthropic/` + `ANTHROPIC_API_KEY`).
    - `const cwd = process.env.SKILLS_DIR ?? process.cwd();` then
      `sandbox: local({ cwd })` so skills are discoverable and overridable.
-   - `tools: [...Object.values(xTools)]` — so the tool module must export ONLY
-     tools. Put pure helpers in a separate `helpers.ts` (a non-tool export here
-     becomes a bogus tool; `tsc` will catch it).
+   - `tools: Object.values(xTools)` (it already returns a fresh array — don't
+     spread-clone it; for several modules use `[...Object.values(a), ...Object.values(b)]`).
+     The tool module must export ONLY tools — put pure helpers in a separate
+     `helpers.ts` (a non-tool export here becomes a bogus tool; `tsc` will catch it).
 2. **AGENTS.md** — one or two lines of always-on framing ("You do X. Use the
    <skill> skill.").
 3. **Skill** `.agents/skills/<name>/SKILL.md` — frontmatter (`name`,
