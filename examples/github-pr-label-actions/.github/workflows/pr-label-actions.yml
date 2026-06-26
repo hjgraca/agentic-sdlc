@@ -48,7 +48,9 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 24
-      - run: npm ci
+      # --ignore-scripts: install pinned, integrity-checked deps without running
+      # dependency lifecycle scripts (no arbitrary install-time code).
+      - run: npm ci --ignore-scripts
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v6

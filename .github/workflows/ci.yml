@@ -29,7 +29,9 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: examples/${{ matrix.example }}/package-lock.json
-      - run: npm ci
+      # --ignore-scripts: install pinned deps without running dependency
+      # lifecycle scripts (no arbitrary install-time code).
+      - run: npm ci --ignore-scripts
       - run: ./node_modules/.bin/tsc --noEmit
       - run: ./node_modules/.bin/flue build --target node
       - run: npm test
