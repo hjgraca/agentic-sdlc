@@ -18,6 +18,7 @@ jobs:
       matrix:
         example:
           - triage-github-actions
+          - github-pr-label-actions
     defaults:
       run:
         working-directory: examples/${{ matrix.example }}
