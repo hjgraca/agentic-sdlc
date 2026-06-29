@@ -1,0 +1,23 @@
+# SAM deploy defaults. `sam deploy` reads these; override per-deploy with flags
+# or run `sam deploy --guided` once to regenerate. resolve_image_repos lets SAM
+# create + manage the ECR repo for the consumer container automatically.
+version = 0.1
+
+[default.global.parameters]
+stack_name = "assistant-slack-aws-daytona"
+
+[default.build.parameters]
+cached = true
+parallel = true
+
+[default.deploy.parameters]
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+resolve_s3 = true
+resolve_image_repos = true
+# Pluggable sandbox: set to "daytona" (and put DAYTONA_API_KEY in the secret) for
+# isolated per-conversation compute; "local" runs work in the Lambda itself.
+parameter_overrides = "SandboxProvider=local"
+
+[default.delete.parameters]
+no_prompt = false

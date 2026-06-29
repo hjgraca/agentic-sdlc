@@ -1,0 +1,6 @@
+node_modules
+dist
+.flue
+data
+.aws-resources.env
+.aws-sam

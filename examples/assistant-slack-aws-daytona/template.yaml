@@ -1,0 +1,168 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  assistant-slack-aws-daytona — full Claude-Tag-style Slack platform.
+  Slack @mention -> API Gateway -> verify-Lambda (HMAC) -> SQS FIFO ->
+  consumer Lambda (container, runs the Flue agent on Bedrock) -> reply.
+  One-command deploy: `sam build && sam deploy --guided`. Teardown: `sam delete`.
+
+Parameters:
+  SandboxProvider:
+    Type: String
+    Default: local
+    AllowedValues: [local, daytona, ec2-ssm]
+    Description: Agent sandbox backend. `daytona` needs DAYTONA_API_KEY in the secret.
+  BedrockModelArn:
+    Type: String
+    Default: '*'
+    Description: >
+      Restrict bedrock:InvokeModel to this model/inference-profile ARN. Default
+      '*' is convenient for a demo; set a real ARN to least-privilege it.
+
+# No Function Globals: the consumer is a container image (PackageType: Image),
+# which cannot carry Runtime/Handler — those live on the zip verify-Lambda only.
+
+Resources:
+
+  # --- session/config/thread-marker storage (private) ---
+  SessionsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  # --- the one secret: Slack signing secret + bot token (+ optional Daytona key) ---
+  SlackSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: Slack signing secret + bot token (+ DAYTONA_API_KEY if used)
+      SecretString: '{"SLACK_SIGNING_SECRET":"REPLACE_ME","SLACK_BOT_TOKEN":"REPLACE_ME","DAYTONA_API_KEY":""}'
+
+  # --- per-conversation single-writer queue + DLQ ---
+  TurnsDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      FifoQueue: true
+
+  TurnsQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      FifoQueue: true
+      ContentBasedDeduplication: true        # EventBridge SQS target sets no dedup id
+      VisibilityTimeout: 900                  # = consumer max timeout
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt TurnsDLQ.Arn
+        maxReceiveCount: 3
+
+  # --- EventBridge Scheduler assumes this to push self-scheduled wakes to SQS ---
+  SchedulerTargetRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: scheduler.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: send-to-turns-queue
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt TurnsQueue.Arn
+
+  # --- verify-Lambda: HMAC + 200 ack + enqueue (the always-on front door) ---
+  VerifyFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: verify/
+      Handler: index.handler
+      Runtime: nodejs22.x
+      Architectures: [x86_64]
+      MemorySize: 256
+      Timeout: 10
+      Environment:
+        Variables:
+          QUEUE_URL: !Ref TurnsQueue
+          SLACK_SECRET_ID: !Ref SlackSecret
+          SESSIONS_BUCKET: !Ref SessionsBucket
+      Policies:
+        - SQSSendMessagePolicy: { QueueName: !GetAtt TurnsQueue.QueueName }
+        - Statement:
+            - Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              Resource: !Ref SlackSecret
+            - Effect: Allow
+              Action: s3:GetObject
+              Resource: !Sub '${SessionsBucket.Arn}/threads/*'
+      Events:
+        SlackEvents:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref SlackApi
+            Path: /slack/events
+            Method: POST
+
+  # --- consumer Lambda: runs the real Flue agent (container image) ---
+  ConsumerFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      Dockerfile: Dockerfile
+      DockerContext: .
+    Properties:
+      PackageType: Image
+      Timeout: 900
+      MemorySize: 2048
+      Environment:
+        Variables:
+          SLACK_SECRET_ID: !Ref SlackSecret
+          SESSIONS_BUCKET: !Ref SessionsBucket
+          SANDBOX_PROVIDER: !Ref SandboxProvider
+          SCHEDULE_QUEUE_ARN: !GetAtt TurnsQueue.Arn
+          SCHEDULE_ROLE_ARN: !GetAtt SchedulerTargetRole.Arn
+          HOME: /tmp
+      Policies:
+        - SQSPollerPolicy: { QueueName: !GetAtt TurnsQueue.QueueName }
+        - Statement:
+            - Effect: Allow                    # inference
+              Action: [bedrock:InvokeModel, bedrock:InvokeModelWithResponseStream]
+              Resource: !Ref BedrockModelArn
+            - Effect: Allow                    # the one secret
+              Action: secretsmanager:GetSecretValue
+              Resource: !Ref SlackSecret
+            - Effect: Allow                    # sessions / config / thread markers
+              Action: [s3:GetObject, s3:PutObject, s3:DeleteObject]
+              Resource: !Sub '${SessionsBucket.Arn}/*'
+            - Effect: Allow
+              Action: s3:ListBucket
+              Resource: !GetAtt SessionsBucket.Arn
+            - Effect: Allow                    # self-scheduling
+              Action: [scheduler:CreateSchedule, scheduler:DeleteSchedule]
+              Resource: !Sub 'arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/followup-*'
+            - Effect: Allow                    # let Scheduler assume the target role
+              Action: iam:PassRole
+              Resource: !GetAtt SchedulerTargetRole.Arn
+      Events:
+        Turns:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt TurnsQueue.Arn
+            BatchSize: 1                       # strict one-turn-at-a-time per conversation
+
+  SlackApi:
+    Type: AWS::Serverless::HttpApi
+
+Outputs:
+  RequestUrl:
+    Description: Slack Event Subscriptions Request URL
+    Value: !Sub 'https://${SlackApi}.execute-api.${AWS::Region}.amazonaws.com/slack/events'
+  SecretName:
+    Description: Put the real Slack signing secret + bot token here
+    Value: !Ref SlackSecret
+  SessionsBucket:
+    Value: !Ref SessionsBucket
