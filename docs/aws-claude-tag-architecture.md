@@ -10,9 +10,10 @@ This is a *living* doc. It records the design we're converging on and which
 parts are **verified by a spike** vs. **still assumed**. It is not a finished
 build — see [Status](#status--open-questions).
 
-> Scope note: the shipped [`assistant-slack-daytona`](../examples/assistant-slack-daytona/)
-> example is the *single-turn* ancestor of this platform. This doc is the
-> multi-turn, stateful, self-scheduling evolution.
+> Scope note: this design is realized end-to-end in the
+> [`assistant-slack-aws-daytona`](../examples/assistant-slack-aws-daytona/)
+> example. The simpler [`assistant-slack-daytona`](../examples/assistant-slack-daytona/)
+> (idiomatic `@flue/slack` server) is its single-turn ancestor.
 
 ## The feature → primitive mapping
 
@@ -155,9 +156,9 @@ the common case at the queue; the consumer should still guard terminal effects.
 | Single-writer per channel (FIFO / DDB lease) | ✅ **verified** on real AWS — `spikes/single-writer` (consumer must use `MaxNumberOfMessages=1`) |
 | Self-scheduling (EventBridge wake → re-enqueue) | ✅ **verified** on real AWS — `spikes/self-scheduling`; **wired live into the agent** (`schedule_followup` tool) — agent scheduled itself, woke, and acted |
 | Daytona adapter + per-channel lifecycle | ✅ **verified** against live Daytona — `spikes/daytona-adapter` (list-by-label is eventually consistent → relies on per-channel serialization) |
-| **Pluggable sandbox providers** (daytona/ec2/k8s/saas, swap via env) | ✅ **verified LIVE** — `e2e/slack-aws/src/sandbox/`; local + daytona both ran real turns; new backend = 9-method `SandboxApi` + 1 registry line |
+| **Pluggable sandbox providers** (daytona/ec2/k8s/saas, swap via env) | ✅ **verified LIVE** — `examples/assistant-slack-aws-daytona/src/sandbox/`; local + daytona both ran real turns; new backend = 9-method `SandboxApi` + 1 registry line |
 | Long-loop checkpoint/resume shape | ✅ **verified** (local) — `spikes/long-loop`; checkpoint in `SessionData.metadata`, idempotent re-wake |
-| **Full e2e: Slack→APIGW→SQS→Lambda→Bedrock→reply** | ✅ **verified LIVE** (real Slack + AWS + Bedrock) — `e2e/slack-aws/` |
+| **Full e2e: Slack→APIGW→SQS→Lambda→Bedrock→reply** | ✅ **verified LIVE** (real Slack + AWS + Bedrock) — `examples/assistant-slack-aws-daytona/` |
 | Durable per-channel memory — **S3** (chosen), DynamoDB (alt) | ✅ **verified LIVE** — survives forced cold start; `spikes/s3-sessions` + `spikes/dynamo-sessions` (each 55/55 contract tests). S3 chosen for text-heavy channels (no size limit, ~11x cheaper, flat per-PUT). |
 | Governance — per-channel scoping | ✅ **verified LIVE** — S3 `config/<channel>.json` → agent toolset; reply-only channel couldn't schedule. Spend caps + audit log still ☐ |
 
@@ -212,7 +213,7 @@ Open questions worth resolving before a full build:
   live in the **source root** (`src/` if present), not the project root, or it's
   silently ignored (state stays in-memory). **All mechanism + design pillars
   verified; the consumer path is proven against real models.**
-- **2026-06-29** — **Full end-to-end verified LIVE** (`e2e/slack-aws/`): a real
+- **2026-06-29** — **Full end-to-end verified LIVE** (`examples/assistant-slack-aws-daytona/`): a real
   Slack `@mention` flowed Slack → API Gateway → verify-Lambda (HMAC) → SQS FIFO
   → consumer container Lambda → `flue run --id <channelKey>` → Bedrock →
   `reply_in_slack` → reply posted in the Slack thread. ~6s warm / ~38s cold.
@@ -224,7 +225,7 @@ Open questions worth resolving before a full build:
   caps, audit log); productionize persistence (`@flue/postgres`→Aurora) and
   sandbox (Daytona). Then **tear down** the live `slack-e2e-*` resources.
 - **2026-06-29** — Productionized persistence on **DynamoDB, not Aurora**
-  (`spikes/dynamo-sessions` + `e2e/slack-aws/src/dynamo-adapter.ts`). Custom
+  (`spikes/dynamo-sessions` + `examples/assistant-slack-aws-daytona/src/dynamo-adapter.ts`). Custom
   PersistenceAdapter swaps only `executionStore.sessions` for DynamoDB, keeps
   the rest in-memory (sound for the one-shot `flue run` consumer). Passes Flue's
   55-test contract suite; **verified live: recalled a fact across a forced cold
@@ -235,7 +236,7 @@ Open questions worth resolving before a full build:
   caught two prod-relevant DynamoDB limits: 400KB item (chunk JSON) and 1MB
   Query page (paginate).
 - **2026-06-29** — Swapped session storage to **S3** (`spikes/s3-sessions` +
-  `e2e/slack-aws/src/s3-adapter.ts`) because channels hold a lot of text and
+  `examples/assistant-slack-aws-daytona/src/s3-adapter.ts`) because channels hold a lot of text and
   Flue rewrites the whole conversation each turn — DynamoDB's per-KB writes +
   400KB chunking scale badly; S3 has no size limit, flat per-PUT cost, ~11x
   cheaper storage, and FIFO already gives the single-writer guarantee DynamoDB's
@@ -245,14 +246,14 @@ Open questions worth resolving before a full build:
   addition to object actions. `db.ts` now prefers SESSIONS_BUCKET > SESSIONS_TABLE
   > local sqlite.
 - **2026-06-29** — **Self-scheduling wired into the live agent**
-  (`e2e/slack-aws/src/tools/schedule.ts`): a `schedule_followup` tool creates a
+  (`examples/assistant-slack-aws-daytona/src/tools/schedule.ts`): a `schedule_followup` tool creates a
   one-shot EventBridge schedule → FIFO wake → same channel-keyed agent acts.
   Verified end to end (agent scheduled itself, woke ~1 min later, acted on its
   note). Needed a scheduler-target IAM role (consumer `iam:PassRole` +
   `scheduler:CreateSchedule`) and — the catch — `ContentBasedDeduplication=true`
   on the FIFO queue, because EventBridge's SQS target sets no dedup id and the
   queue silently rejected the send otherwise.
-- **2026-06-29** — **Pluggable sandbox providers** (`e2e/slack-aws/src/sandbox/`).
+- **2026-06-29** — **Pluggable sandbox providers** (`examples/assistant-slack-aws-daytona/src/sandbox/`).
   The agent talks to a `SandboxProvider.forChannel(id)` interface, never a
   concrete backend; `SANDBOX_PROVIDER` env selects local/daytona/ec2-ssm/…
   (default local). Enabler: Flue's `SandboxApi` is the seam — any backend (EC2
@@ -261,7 +262,7 @@ Open questions worth resolving before a full build:
   per-channel box (`SANDBOX-DAYTONA-Linux-42`). Live Lambda still defaults to
   `local`; prod switch = set SANDBOX_PROVIDER + DAYTONA_API_KEY.
 - **2026-06-29** — Governance pt.1: **per-channel scoping**
-  (`e2e/slack-aws/src/governance/channel-config.ts`). Admin puts
+  (`examples/assistant-slack-aws-daytona/src/governance/channel-config.ts`). Admin puts
   `config/<channel>.json` in the sessions bucket (`{tools, model?,
   maxTokensPerTurn?}`); consumer loads it at turn start and passes
   CHANNEL_TOOLS/CHANNEL_MODEL to the agent, which builds its toolset from the

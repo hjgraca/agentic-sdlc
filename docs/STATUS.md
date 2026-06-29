@@ -15,7 +15,7 @@ live-verified AWS deployment. Full design + decision log:
 
 - **End-to-end pipeline**: Slack @mention → API Gateway → verify-Lambda (HMAC) →
   SQS FIFO (one writer per channel) → container consumer (`flue run --id`) →
-  Bedrock → reply in thread. Code: [`e2e/slack-aws/`](../e2e/slack-aws/).
+  Bedrock → reply in thread. Code: [`examples/assistant-slack-aws-daytona/`](../examples/assistant-slack-aws-daytona/).
 - **Per-channel memory** (Claude Tag's "one Claude per channel"), durable on **S3**
   (chosen over DynamoDB for text-heavy channels; both adapters pass Flue's 55-test
   contract suite). Survives cold starts.
@@ -55,10 +55,10 @@ policy is undecided. Resolve it the day you actually need two channels to differ
 - **Flip on Daytona in prod** — set `SANDBOX_PROVIDER=daytona` + `DAYTONA_API_KEY`.
 - **Productionize config authoring** — only once the open question above resolves.
 - **Tear down** — live `slack-e2e-*` AWS resources + the Slack app; inventory in
-  `e2e/slack-aws/.aws-resources.env` (gitignored). Rotate the Slack tokens after.
+  `examples/assistant-slack-aws-daytona/.aws-resources.env` (gitignored). Rotate the Slack tokens after.
 
 ## Live resources (running)
 
 The AWS stack and Slack app are **left running** so the bot can be used — that's
 the best way to discover what's actually needed next. Teardown inventory is in
-`e2e/slack-aws/.aws-resources.env` (gitignored; never committed).
+`examples/assistant-slack-aws-daytona/.aws-resources.env` (gitignored; never committed).
