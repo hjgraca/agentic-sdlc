@@ -6,8 +6,8 @@ import * as v from 'valibot';
  * Let the agent schedule its own future wake — Claude Tag's "takes initiative /
  * pursue over hours-days." Creates a one-shot EventBridge schedule that, when it
  * fires, enqueues a `scheduled_wake` turn into the SAME per-channel FIFO queue,
- * so the wake flows through the same single-writer path as user turns (proven in
- * spikes/self-scheduling). The agent supplies only a delay + a note; channel
+ * so the wake flows through the same single-writer path as user turns. The agent
+ * supplies only a delay + a note; channel
  * identity comes from env (set per-turn by the handler), never from the model.
  *
  * Env: SCHEDULE_QUEUE_ARN, SCHEDULE_ROLE_ARN, SLACK_CHANNEL_ID, SLACK_TEAM_ID,

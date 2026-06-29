@@ -5,7 +5,7 @@ import { daytona } from './daytona-adapter.ts';
 
 /**
  * Daytona provider: one remote Linux sandbox per channel (isolated shell + fs).
- * Reuses the SandboxApi adapter verified in spikes/daytona-adapter. Per-channel
+ * Reuses the verified SandboxApi adapter. Per-channel
  * create-or-reuse keyed by label; relies on serialized turns (SQS FIFO) so
  * concurrent calls for one channel can't race the (eventually-consistent)
  * list-by-label. Daytona's autoStop/autoDelete reap idle boxes.
