@@ -11,11 +11,16 @@ COPY package.json package-lock.json* ./
 RUN npm install --omit=dev
 
 # Project sources discovered at runtime by `flue run` (AGENTS.md, src/, config),
-# plus the prebuilt dist and the handler.
+# the skills, and the handler.
 COPY flue.config.ts tsconfig.json AGENTS.md ./
 COPY src ./src
-COPY dist ./dist
+COPY .agents ./.agents
 COPY handler.ts ./
+
+# Build the Flue server bundle (dist/) inside the image so `sam build` /
+# `docker build` is self-contained — no pre-build step. @flue/cli is a prod dep,
+# so it's present after --omit=dev.
+RUN node_modules/.bin/flue build --target node
 
 # The Lambda Node RIC resolves `handler.handler` to a .mjs/.js module — it does
 # NOT type-strip a .ts entrypoint. Transpile handler.ts → handler.mjs at build

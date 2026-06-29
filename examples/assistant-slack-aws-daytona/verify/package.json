@@ -1,0 +1,7 @@
+{
+  "name": "slack-verify-lambda",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Slack signature verify + enqueue. AWS SDK v3 from the Lambda runtime; no deps.",
+  "private": true
+}

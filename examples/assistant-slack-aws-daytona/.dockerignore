@@ -2,5 +2,10 @@ node_modules
 dist
 .flue
 data
+.git
 .aws-resources.env
+.env
+verify
+template.yaml
+samconfig.toml
 .aws-sam

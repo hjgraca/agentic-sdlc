@@ -131,17 +131,51 @@ need the API Gateway URL before finishing — call it `<REQUEST_URL>`.
   POST `{"type":"url_verification","challenge":"abc"}` with valid headers → it
   echoes `abc`; a bad signature → `401`.
 
-## Deploy the AWS pipeline
+## Deploy the AWS pipeline (SAM — one command)
 
-The stack: ECR (consumer image), SQS FIFO + DLQ, IAM roles, the verify-Lambda
-(zip) + consumer Lambda (container), API Gateway, an S3 bucket (sessions/config/
-thread-markers), a Secrets Manager secret, and — for self-scheduling — an
-EventBridge scheduler-target role. All are AWS-API-only; **no public endpoint
-except the API Gateway** Slack posts to.
+The whole stack is defined in [`template.yaml`](template.yaml) (AWS SAM): S3
+bucket, SQS FIFO + DLQ, the Secrets Manager secret, both Lambdas (verify = zip,
+consumer = container image SAM builds + pushes to ECR for you), API Gateway, the
+EventBridge scheduler-target role, the SQS→consumer mapping, and least-privilege
+IAM — all wired together. Everything is AWS-API-only; **the API Gateway URL is
+the only public endpoint** (Slack posts to it).
 
-`.aws-resources.env` (gitignored) records the concrete resource names/ARNs of a
-deployment for teardown. The exact create commands used to stand this up live in
-the build log / architecture doc; the load-bearing settings:
+Prereqs: AWS credentials, Docker (for the consumer image), and
+[AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html).
+Bedrock auth is the deployer's AWS account/role — make sure
+`us.anthropic.claude-sonnet-4-6` is enabled in your region.
+
+```bash
+sam build                     # builds the verify zip + the consumer image
+sam deploy --guided           # first time: pick region, confirm; saved to samconfig.toml
+#   parameter SandboxProvider: local (default) | daytona | ec2-ssm
+
+# Deploy prints outputs, incl. the Slack Request URL and the secret name:
+#   RequestUrl  = https://<api-id>.execute-api.<region>.amazonaws.com/slack/events
+#   SecretName  = <the Secrets Manager secret>
+
+# Fill the secret with your real Slack values (and Daytona key if using it),
+# then bounce the functions so they re-read it:
+aws secretsmanager put-secret-value --secret-id <SecretName> \
+  --secret-string '{"SLACK_SIGNING_SECRET":"…","SLACK_BOT_TOKEN":"xoxb-…","DAYTONA_API_KEY":""}'
+aws lambda update-function-configuration --function-name <stack>-VerifyFunction-… --description "reload $(date +%s)"
+aws lambda update-function-configuration --function-name <stack>-ConsumerFunction-… --description "reload $(date +%s)"
+```
+
+Then set the **Request URL** in your Slack app (see
+[Set up the Slack app](#set-up-the-slack-app)) and `@mention` the bot.
+
+**Teardown — one command:** `sam delete` (removes the whole stack, including the
+auto-managed ECR repo). Rotate the Slack signing secret + bot token afterward.
+
+### Switching the sandbox / model
+
+- **Daytona compute:** `sam deploy --parameter-overrides SandboxProvider=daytona`
+  and put `DAYTONA_API_KEY` in the secret.
+- **Least-privilege Bedrock:** pass `BedrockModelArn=<model/inference-profile arn>`
+  (defaults to `*` for demo convenience).
+
+### Load-bearing settings (encoded in the template)
 
 - **SQS FIFO**: `ContentBasedDeduplication=true` (EventBridge's SQS target sets
   no dedup id), `VisibilityTimeout=900` (= consumer max), DLQ `maxReceiveCount=3`.
@@ -152,6 +186,9 @@ the build log / architecture doc; the load-bearing settings:
   secret + S3 (sessions/config/threads) + `scheduler:CreateSchedule` +
   `iam:PassRole` on the scheduler-target role; scheduler-target → trusts
   `scheduler.amazonaws.com`, `sqs:SendMessage` only.
+
+> `.aws-resources.env` (gitignored) is just a scratch inventory from a manual
+> deploy; with SAM the stack is the source of truth and `sam delete` is teardown.
 
 ### Secrets (Secrets Manager)
 
