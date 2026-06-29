@@ -9,7 +9,13 @@ import * as v from 'valibot';
  *
  * Admins set this out-of-band (S3 put); read at turn start by the consumer.
  */
-export const ALL_TOOLS = ['reply_in_slack', 'schedule_followup'] as const;
+export const ALL_TOOLS = [
+	'reply_in_slack',
+	'schedule_followup',
+	'post_to_channel',
+	'post_in_thread',
+	'register_thread',
+] as const;
 export type ToolName = (typeof ALL_TOOLS)[number];
 
 const ConfigSchema = v.object({

@@ -17,7 +17,19 @@ import { loadChannelConfig, allowedTools } from './src/governance/channel-config
 const execFileAsync = promisify(execFile);
 
 interface SqsEvent { Records: { body: string }[] }
-interface Turn { channelId: string; teamId: string; threadTs: string; messageTs: string; text: string; eventId: string }
+interface Turn {
+	// `conversationId` is the per-THREAD key the verify-Lambda assigns
+	// (conv:<team>:<channel>:<rootTs>) — set for mentions and routed thread
+	// replies. `kind` distinguishes a starting mention from a follow-up reply.
+	conversationId?: string;
+	kind?: 'mention' | 'reply';
+	channelId: string;
+	teamId: string;
+	threadTs: string;
+	messageTs: string;
+	text: string;
+	eventId: string;
+}
 
 // Secrets are read once per warm container from Secrets Manager and injected
 // into the agent subprocess env: SLACK_BOT_TOKEN (reply tool) and, when the
@@ -34,10 +46,12 @@ async function secrets(): Promise<Secrets> {
 	return cachedSecrets;
 }
 
-// Memory key = CHANNEL (one shared Claude per channel; anyone picks up the
-// conversation). NOT per-thread — that would silo each mention's memory.
+// Memory key = the conversation (per THREAD: conv:<team>:<channel>:<rootTs>),
+// so each interview/spec is its own isolated conversation and several can run in
+// one channel without bleeding together. Falls back to a channel key for any
+// turn that predates conversation ids.
 function conversationKey(t: Turn): string {
-	return `slack:${t.teamId}:${t.channelId}`;
+	return t.conversationId ?? `slack:${t.teamId}:${t.channelId}`;
 }
 
 /**
@@ -88,6 +102,9 @@ async function runTurn(t: Turn, sec: Secrets): Promise<void> {
 				SLACK_CHANNEL_ID: t.channelId,
 				SLACK_TEAM_ID: t.teamId,
 				SLACK_THREAD_TS: t.threadTs,
+				// Interview tools: the conversation id so post_to_channel can mark its
+				// message as a routable thread for this conversation.
+				...(t.conversationId ? { FLUE_CONVERSATION_ID: t.conversationId } : {}),
 				// Governance scope for this channel's turn.
 				CHANNEL_TOOLS: tools.join(','),
 				...(config.model ? { CHANNEL_MODEL: config.model } : {}),
