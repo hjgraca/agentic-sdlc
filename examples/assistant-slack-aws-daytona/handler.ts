@@ -1,7 +1,7 @@
 /**
  * SQS consumer Lambda (container image). For each Slack app_mention turn enqueued
  * by the verify-Lambda, runs the real Flue agent to completion keyed by the Slack
- * conversation (the path proven in spikes/e2e-consumer), then the agent posts its
+ * conversation (the proven consumer→keyed-agent path), then the agent posts its
  * own reply via the reply_in_slack tool.
  *
  * Why shell out to `flue run` instead of an in-process call: it's the supported

@@ -152,19 +152,19 @@ the common case at the queue; the consumer should still guard terminal effects.
 
 | Pillar | State |
 |---|---|
-| Durable per-channel memory (`db.ts` → Aurora) | ✅ **verified** viable — `spikes/db-persistence` |
-| Single-writer per channel (FIFO / DDB lease) | ✅ **verified** on real AWS — `spikes/single-writer` (consumer must use `MaxNumberOfMessages=1`) |
-| Self-scheduling (EventBridge wake → re-enqueue) | ✅ **verified** on real AWS — `spikes/self-scheduling`; **wired live into the agent** (`schedule_followup` tool) — agent scheduled itself, woke, and acted |
-| Daytona adapter + per-channel lifecycle | ✅ **verified** against live Daytona — `spikes/daytona-adapter` (list-by-label is eventually consistent → relies on per-channel serialization) |
+| Durable per-channel memory (`db.ts` → Aurora) | ✅ **verified** viable |
+| Single-writer per channel (FIFO / DDB lease) | ✅ **verified** on real AWS (consumer must use `MaxNumberOfMessages=1`) |
+| Self-scheduling (EventBridge wake → re-enqueue) | ✅ **verified** on real AWS; **wired live into the agent** (`schedule_followup` tool) — agent scheduled itself, woke, and acted |
+| Daytona adapter + per-channel lifecycle | ✅ **verified** against live Daytona (list-by-label is eventually consistent → relies on per-channel serialization) |
 | **Pluggable sandbox providers** (daytona/ec2/k8s/saas, swap via env) | ✅ **verified LIVE** — `examples/assistant-slack-aws-daytona/src/sandbox/`; local + daytona both ran real turns; new backend = 9-method `SandboxApi` + 1 registry line |
-| Long-loop checkpoint/resume shape | ✅ **verified** (local) — `spikes/long-loop`; checkpoint in `SessionData.metadata`, idempotent re-wake |
+| Long-loop checkpoint/resume shape | ✅ **verified** (local); checkpoint in `SessionData.metadata`, idempotent re-wake |
 | **Full e2e: Slack→APIGW→SQS→Lambda→Bedrock→reply** | ✅ **verified LIVE** (real Slack + AWS + Bedrock) — `examples/assistant-slack-aws-daytona/` |
-| Durable per-channel memory — **S3** (chosen), DynamoDB (alt) | ✅ **verified LIVE** — survives forced cold start; `spikes/s3-sessions` + `spikes/dynamo-sessions` (each 55/55 contract tests). S3 chosen for text-heavy channels (no size limit, ~11x cheaper, flat per-PUT). |
+| Durable per-channel memory — **S3** (chosen), DynamoDB (alt) | ✅ **verified LIVE** — survives forced cold start (each 55/55 contract tests). S3 chosen for text-heavy channels (no size limit, ~11x cheaper, flat per-PUT). |
 | Governance — per-channel scoping | ✅ **verified LIVE** — S3 `config/<channel>.json` → agent toolset; reply-only channel couldn't schedule. Spend caps + audit log still ☐ |
 
 Open questions worth resolving before a full build:
 - ~~Does the consumer drive a *keyed* instance to completion via a supported
-  API, or does that require Flue internals?~~ **RESOLVED** (`spikes/e2e-consumer`):
+  API, or does that require Flue internals?~~ **RESOLVED**:
   `flue run --id <channelId>` is the supported run-to-completion path and resumes
   durable per-channel memory — no internals. Consumer = `SQS msg → flue run --id
   <channelId> --input <turn>` (or the built server on Fargate).
@@ -174,17 +174,17 @@ Open questions worth resolving before a full build:
 
 ## Progress log
 
-- **2026-06-26** — Spiked `db.ts` persistence (`spikes/db-persistence`): a
+- **2026-06-26** — Spiked `db.ts` persistence: a
   per-channel session survives 3 separate processes on `sqlite()`. Confirmed
   `@flue/postgres` is official, so Aurora is a one-liner. Memory pillar holds.
-- **2026-06-26** — Spiked single-writer on **real AWS** (`spikes/single-writer`):
+- **2026-06-26** — Spiked single-writer on **real AWS**:
   SQS FIFO `MessageGroupId=channelId` serializes turns per channel (cross-channel
   parallel); DDB conditional-write lease gives single-owner for the long loop.
   Learning: FIFO batches multiple msgs of one group into a single `Receive` when
   `MaxNumberOfMessages>1` — consumer must use **`MaxNumberOfMessages=1`**.
   Resources torn down, none left behind.
-- **2026-06-26** — Spiked self-scheduling on **real AWS**
-  (`spikes/self-scheduling`): an app-created EventBridge Scheduler one-shot
+- **2026-06-26** — Spiked self-scheduling on **real AWS**:
+  an app-created EventBridge Scheduler one-shot
   `at(~90s)` schedule fired and delivered a synthetic turn into the per-channel
   FIFO queue (`MessageGroupId=channelId`) — scheduled wakes reuse the
   single-writer path. Learnings: IAM role assumability is eventually consistent
@@ -193,20 +193,20 @@ Open questions worth resolving before a full build:
   only `scheduler.amazonaws.com` + `sqs:SendMessage` on the one queue. Resources
   torn down.
 - **2026-06-26** — Spiked the Daytona adapter against the **live Daytona API**
-  (`spikes/daytona-adapter`, importing the real example files): full SessionEnv
+  (importing the real example files): full SessionEnv
   round-trip (exec + fs) passes, ~420ms create. Found Daytona's list-by-label
   (and delete) are **eventually consistent** (~1-2s) → naive create-or-reuse can
   double-create under concurrency; closed by per-channel serialization (FIFO +
   lease). `provision.ts` now documents this. Boxes torn down, none left.
   Daytona API is public HTTPS, so Fargate egress == laptop egress (outbound 443).
-- **2026-06-26** — Spiked long-loop checkpoint/resume (`spikes/long-loop`, local
+- **2026-06-26** — Spiked long-loop checkpoint/resume (local
   Flue): a 4-stage task advanced one stage per process across 4 separate
   processes, resuming from a durable checkpoint stored in `SessionData.metadata`;
   a duplicate wake was an idempotent no-op. Confirms "pursue over days" = many
   short woken turns over a checkpoint (persistence + self-scheduling +
   single-writer composed), not a pinned process.
-- **2026-06-26** — Spiked the consumer→keyed-agent slice (`spikes/e2e-consumer`,
-  **real Bedrock**): `flue run --id <channelId>` drives a channel-keyed agent to
+- **2026-06-26** — Spiked the consumer→keyed-agent slice
+  (**real Bedrock**): `flue run --id <channelId>` drives a channel-keyed agent to
   completion and resumes durable per-channel memory across separate processes
   (turn 2 recalled turn 1; a different id did not) — the supported API, no Flue
   internals. Resolved the last open integration question. Learning: `db.ts` must
@@ -225,7 +225,7 @@ Open questions worth resolving before a full build:
   caps, audit log); productionize persistence (`@flue/postgres`→Aurora) and
   sandbox (Daytona). Then **tear down** the live `slack-e2e-*` resources.
 - **2026-06-29** — Productionized persistence on **DynamoDB, not Aurora**
-  (`spikes/dynamo-sessions` + `examples/assistant-slack-aws-daytona/src/dynamo-adapter.ts`). Custom
+  (`examples/assistant-slack-aws-daytona/src/dynamo-adapter.ts`). Custom
   PersistenceAdapter swaps only `executionStore.sessions` for DynamoDB, keeps
   the rest in-memory (sound for the one-shot `flue run` consumer). Passes Flue's
   55-test contract suite; **verified live: recalled a fact across a forced cold
@@ -235,8 +235,8 @@ Open questions worth resolving before a full build:
   choice only if you need SQL/relational access to session data. Contract suite
   caught two prod-relevant DynamoDB limits: 400KB item (chunk JSON) and 1MB
   Query page (paginate).
-- **2026-06-29** — Swapped session storage to **S3** (`spikes/s3-sessions` +
-  `examples/assistant-slack-aws-daytona/src/s3-adapter.ts`) because channels hold a lot of text and
+- **2026-06-29** — Swapped session storage to **S3**
+  (`examples/assistant-slack-aws-daytona/src/s3-adapter.ts`) because channels hold a lot of text and
   Flue rewrites the whole conversation each turn — DynamoDB's per-KB writes +
   400KB chunking scale badly; S3 has no size limit, flat per-PUT cost, ~11x
   cheaper storage, and FIFO already gives the single-writer guarantee DynamoDB's

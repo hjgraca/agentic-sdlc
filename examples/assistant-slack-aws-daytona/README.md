@@ -62,7 +62,7 @@ submission/run/event machinery in in-memory SQLite and swaps only
 `executionStore.sessions` for S3 (one object per session) — sound because each
 SQS turn is a one-shot `flue run` (only the session crosses processes) and FIFO
 already serializes writes per conversation. Validated against Flue's own 55-test
-contract suite (`spikes/s3-sessions`). No VPC/NAT — reached over the Lambda role.
+contract suite. No VPC/NAT — reached over the Lambda role.
 
 `db.ts` preference: `SESSIONS_BUCKET` (S3) > `SESSIONS_TABLE` (DynamoDB alt,
 `src/dynamo-adapter.ts`, handles 400 KB-item chunking + 1 MB-Query pagination) >
