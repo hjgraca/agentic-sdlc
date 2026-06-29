@@ -1,6 +1,0 @@
-# Generic base — committed, no account-specific values. Deploy via an overlay
-# (see ../local/) that patches in your registry, IAM role, and skills repo.
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - deployment.yaml

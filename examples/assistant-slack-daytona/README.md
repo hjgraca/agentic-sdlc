@@ -11,11 +11,11 @@ own remote [Daytona](https://www.daytona.io) sandbox — a fresh Linux box with 
 shell and filesystem — so it can actually *run* the task (execute code,
 reproduce an error, format input) before replying in the thread.
 
-This is the sibling of [`assistant-slack-k8s`](../assistant-slack-k8s/): same
-Slack ingress, but the agent's **workspace** is a remote Daytona sandbox instead
-of the server's local filesystem. That one change is why this is a separate
-example, not a config flag — it moves where the agent's work *and its skills*
-physically live.
+The agent's **workspace** is a remote Daytona sandbox rather than the server's
+local filesystem — so each channel/thread gets an isolated Linux box where the
+model can run commands and operate on files. That choice moves where the agent's
+work *and its skills* physically live (into the sandbox), which is the main thing
+this example demonstrates.
 
 ## Two axes: where the server runs vs. where the agent works
 

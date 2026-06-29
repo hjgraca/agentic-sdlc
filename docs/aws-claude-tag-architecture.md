@@ -10,9 +10,9 @@ This is a *living* doc. It records the design we're converging on and which
 parts are **verified by a spike** vs. **still assumed**. It is not a finished
 build — see [Status](#status--open-questions).
 
-> Scope note: the two shipped examples (`assistant-slack-k8s`,
-> `assistant-slack-daytona`) are the *single-turn* ancestors of this platform.
-> This doc is the multi-turn, stateful, self-scheduling evolution.
+> Scope note: the shipped [`assistant-slack-daytona`](../examples/assistant-slack-daytona/)
+> example is the *single-turn* ancestor of this platform. This doc is the
+> multi-turn, stateful, self-scheduling evolution.
 
 ## The feature → primitive mapping
 
