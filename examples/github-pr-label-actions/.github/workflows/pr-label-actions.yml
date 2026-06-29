@@ -1,0 +1,84 @@
+# Label-driven PR actions, one-shot on a GitHub-hosted runner. A label applied
+# to a PR triggers a single `flue run`; the skill matching the label decides
+# what to do. The shipped skill is dependabot-automerge.
+#
+# SECURITY — read before editing:
+#   * Trigger is `pull_request_target`, which runs in the BASE repo's context
+#     with a write token (a plain `pull_request` from a fork/Dependabot gets a
+#     read-only token and can't approve/merge). The well-known risk of
+#     pull_request_target is running untrusted PR code with that token — so this
+#     workflow checks out the BASE repo (the default for pull_request_target),
+#     NOT the PR head, and the agent only ever calls the GitHub API. It never
+#     runs the PR's code. Do not add a step that checks out or runs
+#     `github.event.pull_request.head`.
+#   * Gated to the `dependencies` label AND author dependabot[bot], so it cannot
+#     be triggered by an arbitrary contributor labelling their own PR.
+#
+# Auth: Bedrock via GitHub OIDC (no stored AWS keys); GitHub via the built-in
+# token scoped by `permissions:` below.
+#
+# Repository variables (Settings → Secrets and variables → Actions → Variables):
+#   AWS_ROLE_ARN, AWS_REGION  — the Bedrock-only role to assume + its region.
+#   SKILLS_REPO               — optional; Skills Project repo for a separate
+#                               release cycle (omit to use the committed skills).
+# Repo setting: enable "Allow auto-merge" (Settings → General → Pull Requests).
+name: PR Label Actions
+
+on:
+  pull_request_target:
+    types: [labeled]
+
+jobs:
+  act:
+    # Only the dependencies label, only on Dependabot's own PRs. Both conditions
+    # must hold — a contributor labelling their PR "dependencies" won't qualify.
+    if: >-
+      github.event.label.name == 'dependencies' &&
+      github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      id-token: write # mint the OIDC token to assume the Bedrock role
+      contents: write # required for GitHub to perform the eventual merge
+      pull-requests: write # approve, comment, label, enable auto-merge
+    steps:
+      # Checks out the BASE repo (pull_request_target default) — this holds the
+      # agent app, NOT the PR's code. Intentional: we never run PR contents.
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      # --ignore-scripts: install pinned, integrity-checked deps without running
+      # dependency lifecycle scripts (no arbitrary install-time code).
+      - run: npm ci --ignore-scripts
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Fetch skills (optional, separate release cycle)
+        if: vars.SKILLS_REPO != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SKILLS_REPO: ${{ vars.SKILLS_REPO }}
+        run: |
+          git config --global url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf "https://github.com/"
+          mkdir -p ./skills && (cd ./skills && npx -y skills add "https://github.com/${SKILLS_REPO}" -a universal -y)
+          echo "SKILLS_DIR=$GITHUB_WORKSPACE/skills" >> "$GITHUB_ENV"
+
+      - name: Run PR-label-action agent
+        # All workflow context reaches the step through env vars (never
+        # interpolated into the shell) — the safe pattern against injection. Only
+        # the repo slug and the numeric PR id are used, never free-text PR fields.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        # `flue run` input must be an object with a string "message"; the skill
+        # parses owner/repo and the PR number out of it. Built in-shell from env
+        # vars so no workflow context is interpolated into the YAML.
+        run: |
+          ./node_modules/.bin/flue run pr-label-actions \
+            --input "$(printf '{"message":"Act on GitHub PR %s#%s (dependencies label)."}' "$REPO" "$PR_NUMBER")"

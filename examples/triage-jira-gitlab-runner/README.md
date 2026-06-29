@@ -69,7 +69,7 @@ triage:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "trigger" && $ISSUE_KEY'
   before_script:
-    - npm ci
+    - npm ci --ignore-scripts
     # Optional: fetch the Skills Project from its own repo (separate release
     # cycle) via skills.sh. Set SKILLS_REPO=org/path as a CI/CD var; omit to use
     # the skills committed in this repo.
