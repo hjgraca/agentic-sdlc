@@ -53,13 +53,13 @@ Dockerfile                   # the webhook SERVER image (no skills baked in)
 Dockerfile.sandbox           # the DAYTONA SNAPSHOT image (skills baked in)
 ```
 
-### The big difference from the k8s example: skills live in the sandbox
+### The key idea: skills live in the sandbox
 
 Flue discovers `AGENTS.md` + `.agents/skills/` at `init()` **from the agent's
 sandbox filesystem** — not from the server process's working directory. With a
-`local()` sandbox (the k8s example) that's the host, so the server image bakes
-the skills. With a **remote** Daytona sandbox, "the filesystem" is the Daytona
-box, so the skills must exist *there*:
+`local()` sandbox that's the host, so the server image bakes the skills. With a
+**remote** Daytona sandbox, "the filesystem" is the Daytona box, so the skills
+must exist *there*:
 
 - `Dockerfile.sandbox` bakes `AGENTS.md` + `.agents/` into an image at
   `/home/daytona` (Daytona's default work dir, which Flue reads via
@@ -137,14 +137,57 @@ cp .env.example .env   # fill in real secrets (Bedrock uses AWS_PROFILE — no k
 
 You need:
 
-- A **Slack app** with Event Subscriptions on (Request URL
-  `https://<host>/channels/slack/events`, subscribed to the `app_mention` bot
-  event), a bot token (`xoxb-…`, scopes `app_mentions:read` + `chat:write`) →
-  `SLACK_BOT_TOKEN`, and the signing secret → `SLACK_SIGNING_SECRET`.
+- A **Slack app** — see [Set up the Slack app](#set-up-the-slack-app) below for
+  the exact click-by-click steps.
 - A **Daytona** account + API key → `DAYTONA_API_KEY`.
 - A **skills snapshot** registered with Daytona → `DAYTONA_SNAPSHOT` (build
   `Dockerfile.sandbox`, push to a registry Daytona can pull, register as a
   snapshot).
+
+## Set up the Slack app
+
+The agent receives Slack [Events API](https://api.slack.com/apis/events-api)
+deliveries at `POST /channels/slack/events` and replies with the Web API. Slack
+needs two credentials from the app — a **signing secret** (verifies inbound
+request bytes) and a **bot token** (authenticates outbound `chat.postMessage`) —
+plus an event subscription so it forwards `@mentions`.
+
+You need the server's **public HTTPS URL** before finishing this (a deployed
+host, or a local tunnel — see [Run locally](#run-locally)). Call it `<HOST>`;
+the Request URL is `https://<HOST>/channels/slack/events`.
+
+1. **Create the app** — <https://api.slack.com/apps> → **Create New App** →
+   **From scratch**. Name it, pick your workspace.
+2. **Bot scopes** — **OAuth & Permissions** → **Scopes** → **Bot Token Scopes**:
+   - `app_mentions:read` — receive `@mention` events.
+   - `chat:write` — post replies.
+3. **Install** — top of the OAuth page → **Install to Workspace** → approve. Copy
+   the **Bot User OAuth Token** (`xoxb-…`) → that's `SLACK_BOT_TOKEN`.
+4. **Signing secret** — **Basic Information** → **App Credentials** → copy the
+   **Signing Secret** → that's `SLACK_SIGNING_SECRET`.
+5. **Event Subscriptions** — toggle **On**:
+   - **Request URL:** `https://<HOST>/channels/slack/events`. Slack immediately
+     POSTs a `url_verification` challenge; the channel verifies the signature and
+     answers it, so the field goes **Verified ✓** once your server is reachable
+     with the matching `SLACK_SIGNING_SECRET`. (So set the secret + start the
+     server *before* saving this.)
+   - **Subscribe to bot events:** add **`app_mention`**.
+   - **Save Changes.** Reinstall the app if Slack prompts.
+6. **Invite the bot** to a channel: `/invite @your-app-name`, then `@mention` it.
+
+> **Reinstalling can rotate the bot token.** Any time you change scopes and
+> reinstall, re-copy the `xoxb-…` token and update `SLACK_BOT_TOKEN` wherever the
+> server reads it.
+
+### Validate without the full round-trip
+
+- **Is the bot token good?** `curl -s -XPOST https://slack.com/api/auth.test
+  -H "Authorization: Bearer $SLACK_BOT_TOKEN"` → `"ok":true` with your team/user.
+- **Is a scope missing?** A Web API call returns `"error":"missing_scope"` —
+  add the scope, reinstall, retry.
+- **Request URL won't verify?** It means the signature check failed or the server
+  isn't reachable: confirm `<HOST>` is public over HTTPS, the server is running,
+  and its `SLACK_SIGNING_SECRET` matches the app's exactly.
 
 ## Build the skills snapshot
 
@@ -155,9 +198,9 @@ docker push <REGISTRY>/slack-assistant-skills:v1
 # DAYTONA_SNAPSHOT=slack-assistant-skills:v1 in your env.
 ```
 
-Rebuild + re-register with a fresh tag whenever the skill changes. (Unlike the
-k8s example's boot-time `skills add`, the skills here are inside the snapshot, so
-new skills ship by rebuilding the snapshot — not by restarting the server.)
+Rebuild + re-register with a fresh tag whenever the skill changes — the skills
+live inside the snapshot, so new skills ship by rebuilding the snapshot, not by
+restarting the server.
 
 ## Run locally
 
@@ -170,8 +213,10 @@ new skills ship by rebuilding the snapshot — not by restarting the server.)
 # To exercise the sandbox, ask something checkable: "what does `seq 1 5 | paste -sd+ | bc` print?"
 
 # Dev server (defaults to port 3583). Expose it to Slack via a tunnel
-# (e.g. `cloudflared tunnel --url http://localhost:3583`) and set the Request URL
-# to <tunnel>/channels/slack/events.
+# (e.g. `cloudflared tunnel --url http://localhost:3583`) — the tunnel URL is the
+# <HOST> in the Slack Request URL: https://<tunnel-host>/channels/slack/events
+# (see "Set up the Slack app"). The server reads SLACK_SIGNING_SECRET /
+# SLACK_BOT_TOKEN / DAYTONA_API_KEY from your .env.
 ./node_modules/.bin/flue dev --target node
 ```
 
@@ -239,14 +284,13 @@ Server deployed (or tunnelled), Request URL set, bot invited to a channel.
 `@`-mention it with a checkable task and confirm the threaded reply reflects real
 sandbox output. The run is async — the Slack reply is the ground truth.
 
-### What you need for real Slack (Layers 3)
+### What you need for real Slack (Layer 3)
 
 | Need | Detail |
 |---|---|
-| Slack workspace | One where you can install apps |
-| Slack app | `app_mention` event subscribed; bot token + signing secret |
-| Public URL | Tunnel (local) or your deployed server's hostname |
-| Bot in a channel | `/invite @yourbot` so it can see mentions |
+| Slack app | Configured per [Set up the Slack app](#set-up-the-slack-app) — `app_mention` subscribed, bot token + signing secret |
+| Public URL | Tunnel (local) or your deployed server's hostname → the Request URL `<HOST>` |
+| Bot in a channel | `/invite @your-app-name` so it can see mentions |
 | Daytona | `DAYTONA_API_KEY` + a registered `DAYTONA_SNAPSHOT` |
 | Bedrock | AWS creds/role + `AWS_REGION` on the `us.` profile |
 
