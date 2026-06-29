@@ -19,17 +19,19 @@ const execFileAsync = promisify(execFile);
 interface SqsEvent { Records: { body: string }[] }
 interface Turn { channelId: string; teamId: string; threadTs: string; messageTs: string; text: string; eventId: string }
 
-// Slack bot token is read once per warm container from Secrets Manager and
-// injected into the agent process env (the reply_in_slack tool reads it).
-let cachedToken: string | undefined;
-async function slackToken(): Promise<string> {
-	if (cachedToken) return cachedToken;
+// Secrets are read once per warm container from Secrets Manager and injected
+// into the agent subprocess env: SLACK_BOT_TOKEN (reply tool) and, when the
+// sandbox is Daytona, DAYTONA_API_KEY (the daytona provider's SDK).
+interface Secrets { SLACK_BOT_TOKEN?: string; DAYTONA_API_KEY?: string }
+let cachedSecrets: Secrets | undefined;
+async function secrets(): Promise<Secrets> {
+	if (cachedSecrets) return cachedSecrets;
 	const sm = new SecretsManagerClient({});
 	const res = await sm.send(new GetSecretValueCommand({ SecretId: process.env.SLACK_SECRET_ID! }));
-	const parsed = JSON.parse(res.SecretString ?? '{}') as { SLACK_BOT_TOKEN?: string };
+	const parsed = JSON.parse(res.SecretString ?? '{}') as Secrets;
 	if (!parsed.SLACK_BOT_TOKEN) throw new Error('SLACK_BOT_TOKEN missing from secret');
-	cachedToken = parsed.SLACK_BOT_TOKEN;
-	return cachedToken;
+	cachedSecrets = parsed;
+	return cachedSecrets;
 }
 
 // Memory key = CHANNEL (one shared Claude per channel; anyone picks up the
@@ -61,7 +63,7 @@ async function ackPickup(t: Turn, token: string): Promise<void> {
 	}
 }
 
-async function runTurn(t: Turn, token: string): Promise<void> {
+async function runTurn(t: Turn, sec: Secrets): Promise<void> {
 	const id = conversationKey(t);
 	const input = JSON.stringify({ message: t.text });
 	// Governance: resolve this channel's tool allowlist + optional model override
@@ -77,7 +79,9 @@ async function runTurn(t: Turn, token: string): Promise<void> {
 			cwd: '/var/task',
 			env: {
 				...process.env,
-				SLACK_BOT_TOKEN: token,
+				SLACK_BOT_TOKEN: sec.SLACK_BOT_TOKEN,
+				// Daytona provider's SDK key (only used when SANDBOX_PROVIDER=daytona).
+				...(sec.DAYTONA_API_KEY ? { DAYTONA_API_KEY: sec.DAYTONA_API_KEY } : {}),
 				FLUE_DB_PATH: '/tmp/flue.db',
 				// Per-turn reply destination (the agent is keyed by channel, so the
 				// thread to reply into is passed per invocation, not via the id).
@@ -100,13 +104,13 @@ async function runTurn(t: Turn, token: string): Promise<void> {
 }
 
 export async function handler(event: SqsEvent): Promise<void> {
-	const token = await slackToken();
+	const sec = await secrets();
 	for (const rec of event.Records) {
 		let turn: Turn;
 		try { turn = JSON.parse(rec.body) as Turn; }
 		catch { console.error('skip: unparseable SQS body'); continue; }
 		console.log(`[turn ${turn.eventId}] channel=${turn.channelId} text=${turn.text.slice(0, 80)}`);
-		await ackPickup(turn, token);  // 👀 the moment we pick it up, before the agent runs
-		await runTurn(turn, token);
+		await ackPickup(turn, sec.SLACK_BOT_TOKEN!);  // 👀 the moment we pick it up, before the agent runs
+		await runTurn(turn, sec);
 	}
 }
