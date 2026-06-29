@@ -1,0 +1,28 @@
+# The SANDBOX image — built into a Daytona snapshot, NOT the webhook server.
+#
+# Flue discovers an agent's framing and skills from the sandbox filesystem at
+# init(): <workdir>/AGENTS.md and <workdir>/.agents/skills/. Since each Slack
+# thread's agent runs in a remote Daytona box, those files must already exist
+# INSIDE that box. We bake them here so a freshly created sandbox is ready with
+# no upload step at dispatch time.
+#
+# Daytona's default work dir is /home/daytona, which is where Flue looks
+# (getWorkDir()). Build, push to a registry Daytona can pull, register it as a
+# snapshot, and set DAYTONA_SNAPSHOT to its name. See the README.
+FROM ubuntu:24.04
+
+# A minimal toolchain for the assistant to actually run things. Add languages
+# your requests need (python3, build-essential, etc.).
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates curl git python3 \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /home/daytona
+
+# The workspace Flue discovers: agent framing + skills (with references/).
+COPY AGENTS.md ./AGENTS.md
+COPY .agents ./.agents
+
+# Daytona starts a long-lived box; keep PID 1 alive. The Daytona runner manages
+# the real lifecycle, so a simple sleep is enough as the default command.
+CMD ["sleep", "infinity"]

@@ -17,6 +17,8 @@ filters by what they have: work source, code host, trigger, and where it runs.
 |---|---|---|---|---|---|---|---|
 | [`triage-jira-k8s`](examples/triage-jira-k8s/) | triage a ticket, post enriched analysis back | Jira | GitLab | Confluence | webhook | Kubernetes (EKS) | ✅ complete |
 | [`triage-jira-gitlab-runner`](examples/triage-jira-gitlab-runner/) | same triage, one-shot in CI | Jira | GitLab | Confluence | Jira → GitLab pipeline trigger | GitLab runners | ✅ complete |
+| [`assistant-slack-k8s`](examples/assistant-slack-k8s/) | answer an @-mention, reply in-thread | Slack | — | — | Slack Events API webhook | Kubernetes (EKS) | ✅ complete |
+| [`assistant-slack-daytona`](examples/assistant-slack-daytona/) | do a task in a sandbox, reply in-thread | Slack | — | Daytona sandbox (per-thread) | Slack Events API webhook | any container host | ✅ complete |
 
 Want triage on a different stack (e.g. Linear + GitLab + GitLab runners)? That's
 a new row/folder, not a config switch — each example is pinned to one trigger and

@@ -1,0 +1,25 @@
+{
+	"name": "slack-aws-e2e",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "flue dev --target node",
+		"build": "flue build --target node"
+	},
+	"dependencies": {
+		"@aws-sdk/client-dynamodb": "^3.700.0",
+		"@aws-sdk/client-secrets-manager": "^3.700.0",
+		"@flue/cli": "1.0.0-beta.5",
+		"@flue/runtime": "1.0.0-beta.5",
+		"@slack/web-api": "^8.0.0-rc.1",
+		"hono": "^4.12.27",
+		"valibot": "^1.4.1",
+		"@aws-sdk/client-s3": "^3.700.0",
+		"@aws-sdk/client-scheduler": "^3.700.0",
+		"@daytona/sdk": "^0.191.0"
+	},
+	"devDependencies": {
+		"@types/node": "^22",
+		"typescript": "^5.9.3"
+	}
+}

@@ -1,0 +1,20 @@
+{
+	"name": "slack-assistant",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "flue dev --target node",
+		"run:assistant": "flue run assistant"
+	},
+	"dependencies": {
+		"@flue/runtime": "1.0.0-beta.5",
+		"@flue/slack": "1.0.0-beta.1",
+		"@slack/web-api": "^8.0.0-rc.1",
+		"hono": "^4.12.27",
+		"valibot": "^1.4.1"
+	},
+	"devDependencies": {
+		"@flue/cli": "1.0.0-beta.5",
+		"typescript": "^5.9.3"
+	}
+}

@@ -1,0 +1,13 @@
+{
+	"name": "spike-daytona-adapter",
+	"private": true,
+	"type": "module",
+	"dependencies": {
+		"@daytona/sdk": "^0.191.0",
+		"@flue/runtime": "1.0.0-beta.5"
+	},
+	"devDependencies": {
+		"@types/node": "^22",
+		"typescript": "^5.9.3"
+	}
+}

@@ -1,0 +1,14 @@
+{
+	"name": "spike-dynamo-sessions",
+	"private": true,
+	"type": "module",
+	"dependencies": {
+		"@aws-sdk/client-dynamodb": "^3.700.0",
+		"@flue/runtime": "1.0.0-beta.5"
+	},
+	"devDependencies": {
+		"@types/node": "^22",
+		"typescript": "^5.9.3",
+		"vitest": "^2.1.9"
+	}
+}

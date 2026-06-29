@@ -1,0 +1,138 @@
+# Self-contained deployment for the Flue Slack assistant. Lives in its own
+# namespace (flue-slack-assistant) so it cannot touch other apps on the cluster.
+#
+# Architecture note: this is a single long-running Flue server. The Slack channel
+# webhook (/channels/slack/events) verifies the request signature and dispatches
+# to an in-process agent keyed by thread — there is no separate receiver/Job model.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: flue-slack-assistant
+---
+# Bedrock access via IRSA, reusing the cluster's existing IAM role.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flue-slack-assistant
+  namespace: flue-slack-assistant
+  annotations:
+    # IAM role (IRSA) granting Bedrock InvokeModel. Replace with your own.
+    eks.amazonaws.com/role-arn: arn:aws:iam::<AWS_ACCOUNT_ID>:role/<BEDROCK_ROLE_NAME>
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flue-slack-assistant
+  namespace: flue-slack-assistant
+  labels:
+    app: flue-slack-assistant
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flue-slack-assistant
+  template:
+    metadata:
+      labels:
+        app: flue-slack-assistant
+    spec:
+      serviceAccountName: flue-slack-assistant
+      volumes:
+        # The Skills Project, materialized at boot into a shared scratch volume.
+        # emptyDir (not a ConfigMap): a ConfigMap caps at ~1MB and flattens the
+        # directory, so it can't carry a skill's references/ subtree. emptyDir
+        # has no size limit and preserves the full .agents/skills/ tree.
+        - name: skills
+          emptyDir: {}
+      initContainers:
+        # Fetch skills from their OWN repo — a separate release cycle from the
+        # agent image — via skills.sh. Re-runs on every pod start, so a rolling
+        # restart picks up new skills with no app rebuild. `skills add -a
+        # universal` installs straight to .agents/skills/ (Flue's discovery
+        # path), so running it from /skills lands them at /skills/.agents/skills/.
+        # The overlay patches in your real SKILLS_REPO (see local/).
+        # node:22 (not -slim) ships git, which skills.sh shells out to.
+        - name: fetch-skills
+          image: node:22
+          workingDir: /skills
+          command:
+            - sh
+            - -c
+            # If the skills repo is private and skills.sh strips any oauth2:token@
+            # from the URL, give git the credential below the CLI via an insteadOf
+            # rewrite. Skip it (and the clone still works) for a public repo.
+            - |
+              if [ -n "$SKILLS_GIT_TOKEN" ]; then
+                git config --global url."https://oauth2:$SKILLS_GIT_TOKEN@gitlab.com/".insteadOf "https://gitlab.com/"
+              fi
+              npx -y skills add "https://gitlab.com/$SKILLS_REPO" -a universal -y
+          env:
+            # Skills Project repo path (org/path, no host) — patched by the overlay.
+            - name: SKILLS_REPO
+              value: "your-org/slack-assistant-skills"
+            # Private-repo auth: a git token from the Secret. Omit for a public repo.
+            - name: SKILLS_GIT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: flue-slack-assistant-secrets
+                  key: SKILLS_GIT_TOKEN
+                  optional: true
+          volumeMounts:
+            - name: skills
+              mountPath: /skills
+      containers:
+        - name: flue-slack-assistant
+          image: <YOUR_REGISTRY>/flue-slack-assistant:v1
+          ports:
+            - containerPort: 8080
+          envFrom:
+            # SLACK_SIGNING_SECRET + SLACK_BOT_TOKEN come from the Secret.
+            - secretRef:
+                name: flue-slack-assistant-secrets
+          env:
+            - name: PORT
+              value: "8080"
+            - name: AWS_REGION
+              value: "us-west-2"
+            # Point Flue's sandbox cwd at the fetched skills. Flue discovers
+            # <SKILLS_DIR>/.agents/skills/ at init().
+            - name: SKILLS_DIR
+              value: "/skills"
+          volumeMounts:
+            - name: skills
+              mountPath: /skills
+          # TCP probe: Flue's server has no GET route at `/` (returns 404), so an
+          # httpGet probe would never pass. Port-open is the correct readiness
+          # signal for this webhook server.
+          readinessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+# Internet-facing NLB. Slack delivers events from its own egress ranges, which
+# rotate, so this is reachable from the internet rather than locked to a fixed
+# prefix-list — the channel's SLACK_SIGNING_SECRET signature check is the
+# security boundary (every request is HMAC-verified before any work). The AWS
+# Load Balancer Controller provisions the NLB from these annotations.
+apiVersion: v1
+kind: Service
+metadata:
+  name: flue-slack-assistant
+  namespace: flue-slack-assistant
+  labels:
+    app: flue-slack-assistant
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: external
+    service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: instance
+    service.beta.kubernetes.io/aws-load-balancer-manage-backend-security-group-rules: "true"
+spec:
+  type: LoadBalancer
+  loadBalancerClass: service.k8s.aws/nlb
+  selector:
+    app: flue-slack-assistant
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080

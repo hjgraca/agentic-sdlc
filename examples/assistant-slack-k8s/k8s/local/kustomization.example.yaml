@@ -1,0 +1,40 @@
+# Local overlay TEMPLATE. Copy to `kustomization.yaml` (gitignored) and fill in
+# your real values — they never get committed.
+#
+#   cp kustomization.example.yaml kustomization.yaml
+#   # edit kustomization.yaml, then:
+#   kubectl apply -k .            # from this local/ directory
+#
+# Everything account-specific lives here; the base stays generic.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../base
+
+# Pin the image to your registry + tag (overrides the base placeholder).
+images:
+  - name: <YOUR_REGISTRY>/flue-slack-assistant
+    newName: <AWS_ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/flue-slack-assistant
+    newTag: v1
+
+# Patch the account-specific bits the base leaves as placeholders.
+patches:
+  # IRSA role on the ServiceAccount.
+  - target:
+      kind: ServiceAccount
+      name: flue-slack-assistant
+    patch: |
+      - op: replace
+        path: /metadata/annotations/eks.amazonaws.com~1role-arn
+        value: arn:aws:iam::<AWS_ACCOUNT_ID>:role/<BEDROCK_ROLE_NAME>
+  # Your Skills Project (separate repo, its own release cycle). The base ships a
+  # placeholder; point the fetch-skills init container at your repo (org/path,
+  # no host — skills.sh prefixes https://gitlab.com/).
+  - target:
+      kind: Deployment
+      name: flue-slack-assistant
+    patch: |
+      - op: replace
+        path: /spec/template/spec/initContainers/0/env/0/value
+        value: your-org/slack-assistant-skills
