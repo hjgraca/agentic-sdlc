@@ -12,6 +12,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
+import { loadChannelConfig, allowedTools } from './src/governance/channel-config.ts';
 
 const execFileAsync = promisify(execFile);
 
@@ -63,6 +64,11 @@ async function ackPickup(t: Turn, token: string): Promise<void> {
 async function runTurn(t: Turn, token: string): Promise<void> {
 	const id = conversationKey(t);
 	const input = JSON.stringify({ message: t.text });
+	// Governance: resolve this channel's tool allowlist + optional model override
+	// (admins set it out-of-band in S3); the agent exposes ONLY allowed tools.
+	const config = await loadChannelConfig(t.channelId);
+	const tools = allowedTools(config);
+	console.log(`[turn ${t.eventId}] scope: tools=[${tools.join(',')}]${config.model ? ` model=${config.model}` : ''}`);
 	// /tmp is Lambda's only writable path; FLUE_DB_PATH points src/db.ts there.
 	const { stdout } = await execFileAsync(
 		'node', ['/var/task/node_modules/@flue/cli/dist/flue.js', 'run', 'assistant',
@@ -78,6 +84,9 @@ async function runTurn(t: Turn, token: string): Promise<void> {
 				SLACK_CHANNEL_ID: t.channelId,
 				SLACK_TEAM_ID: t.teamId,
 				SLACK_THREAD_TS: t.threadTs,
+				// Governance scope for this channel's turn.
+				CHANNEL_TOOLS: tools.join(','),
+				...(config.model ? { CHANNEL_MODEL: config.model } : {}),
 				// schedule_followup tool: where a future wake is enqueued + the role
 				// EventBridge assumes to do it. (SCHEDULE_* set on the Lambda config.)
 				...(process.env.SCHEDULE_QUEUE_ARN ? { SCHEDULE_QUEUE_ARN: process.env.SCHEDULE_QUEUE_ARN } : {}),

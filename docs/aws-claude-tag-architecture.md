@@ -159,7 +159,7 @@ the common case at the queue; the consumer should still guard terminal effects.
 | Long-loop checkpoint/resume shape | ✅ **verified** (local) — `spikes/long-loop`; checkpoint in `SessionData.metadata`, idempotent re-wake |
 | **Full e2e: Slack→APIGW→SQS→Lambda→Bedrock→reply** | ✅ **verified LIVE** (real Slack + AWS + Bedrock) — `e2e/slack-aws/` |
 | Durable per-channel memory — **S3** (chosen), DynamoDB (alt) | ✅ **verified LIVE** — survives forced cold start; `spikes/s3-sessions` + `spikes/dynamo-sessions` (each 55/55 contract tests). S3 chosen for text-heavy channels (no size limit, ~11x cheaper, flat per-PUT). |
-| Governance (per-channel scoping, spend caps, audit log) | ☐ product layer, not started |
+| Governance — per-channel scoping | ✅ **verified LIVE** — S3 `config/<channel>.json` → agent toolset; reply-only channel couldn't schedule. Spend caps + audit log still ☐ |
 
 Open questions worth resolving before a full build:
 - ~~Does the consumer drive a *keyed* instance to completion via a supported
@@ -259,5 +259,13 @@ Open questions worth resolving before a full build:
   via SSM/SSH, k8s pod via connectExec, Fargate, SaaS) is 9 methods + 1 registry
   line. Verified live: local ran a turn; daytona ran a real shell command in a
   per-channel box (`SANDBOX-DAYTONA-Linux-42`). Live Lambda still defaults to
-  `local`; prod switch = set SANDBOX_PROVIDER + DAYTONA_API_KEY. *Next:* the
-  governance layer (per-channel tool/permission scoping, spend caps, audit log).
+  `local`; prod switch = set SANDBOX_PROVIDER + DAYTONA_API_KEY.
+- **2026-06-29** — Governance pt.1: **per-channel scoping**
+  (`e2e/slack-aws/src/governance/channel-config.ts`). Admin puts
+  `config/<channel>.json` in the sessions bucket (`{tools, model?,
+  maxTokensPerTurn?}`); consumer loads it at turn start and passes
+  CHANNEL_TOOLS/CHANNEL_MODEL to the agent, which builds its toolset from the
+  allowlist — a disallowed tool is genuinely absent, not just declined. Verified
+  live (reply-only channel couldn't schedule). Consumer v8. *Next (governance):*
+  spend caps (parse `flue run` usage.cost → per-channel/org counters) and an
+  audit log of who-asked-what.

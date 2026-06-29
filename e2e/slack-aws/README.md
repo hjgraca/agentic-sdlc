@@ -76,6 +76,24 @@ Verified warm round-trip ~6s; cold ~38s (Lambda init + Flue boot + Bedrock turn)
   `ContentBasedDeduplication=true` (EventBridge's SQS target sets MessageGroupId
   but no dedup id; explicit ids from the verify-Lambda still win).
 
+## Governance: per-channel scoping
+
+Admins scope each channel out-of-band by putting a JSON object at
+`s3://<SESSIONS_BUCKET>/config/<urlencoded-channelId>.json`:
+
+```json
+{ "tools": ["reply_in_slack"], "model": "amazon-bedrock/us.anthropic.claude-sonnet-4-6" }
+```
+
+The consumer (`src/governance/channel-config.ts`) loads it at turn start and
+passes the allowlist + model to the agent via `CHANNEL_TOOLS`/`CHANNEL_MODEL`.
+The agent (`src/agents/assistant.ts`) builds its toolset from the allowlist, so a
+disallowed tool is genuinely **absent** — not just declined. No config → all
+tools (safe default). Verified live: a reply-only channel could not schedule a
+follow-up because `schedule_followup` wasn't in its toolset.
+
+(Spend caps + audit log are the remaining governance pieces — not yet built.)
+
 ## Slack bot scopes
 
 `app_mentions:read`, `chat:write`, `reactions:write`. Adding a scope requires
