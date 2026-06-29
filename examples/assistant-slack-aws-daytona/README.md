@@ -254,7 +254,7 @@ Verified live: a reply-only channel could not schedule a follow-up.
 > used, so config can't be pre-authored by ID. The scoping *hook* defaults safely;
 > the authoring/bootstrapping policy (hand-edit S3 · a `/claude-config` slash
 > command · a `_default.json` team fallback · an external store) is an open design
-> choice — see `docs/STATUS.md`.
+> choice.
 
 Spend caps + an audit log are the remaining governance pieces (not yet built).
 
