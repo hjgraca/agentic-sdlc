@@ -114,7 +114,13 @@ export async function handler(apiEvent) {
 	}
 
 	// (B) plain message → only a THREAD REPLY in a conversation we track.
-	if (e.type === 'message') {
+	// OFF BY DEFAULT: subscribing to message.channels makes Slack deliver EVERY
+	// message in the bot's channels (a privacy/noise concern), even though we
+	// drop all but tracked-thread replies below. Default UX is @mention-to-reply
+	// (a mention inside a thread already routes to that thread's conversation via
+	// branch A). Opt in with ALLOW_MESSAGE_EVENTS=true + the message.channels
+	// subscription only for a private/dedicated channel where that's acceptable.
+	if (e.type === 'message' && process.env.ALLOW_MESSAGE_EVENTS === 'true') {
 		// Drop bot/own messages and non-user subtypes (edits, joins, etc.).
 		if (e.bot_id || e.subtype || e.app_id) return resp(200, '');
 		// Must be a reply inside a thread (not top-level channel chatter).
