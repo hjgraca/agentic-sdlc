@@ -31,9 +31,9 @@ typed tools — is the documented pattern.)
 ```
 Hourly cron tick (on: schedule)
   → GitHub-hosted runner (singleton via concurrency group)
-  → npm ci → flue run flue-ideation
+  → npm ci → shallow-clone Flue's repo into context/flue → flue run flue-ideation
   → agent lists `agent-idea` issues (its memory); if at cap (5 open) → exit cheap
-  → else: reads the example matrix (local) + node_modules/@flue/* + Flue docs
+  → else: reads the example matrix + context/flue (blueprints, docs, packages) — all local
   → finds the highest-value gap, dedups vs open AND closed ideas
   → files at most ONE `agent-idea` issue (or none) → exits
 ```
@@ -44,7 +44,7 @@ flowchart LR
     Manual["workflow_dispatch<br/>(manual/test)"]
 
     subgraph runner["GitHub-hosted runner (one-shot, singleton)"]
-        Before["checkout · setup-node · npm ci<br/>OIDC → assume Bedrock role<br/>skills add -a universal (if SKILLS_REPO)"]
+        Before["checkout · setup-node · npm ci<br/>OIDC → assume Bedrock role<br/>git clone Flue → context/flue<br/>skills add -a universal (if SKILLS_REPO)"]
         Run["flue run flue-ideation"]
         Agent["flue-ideation agent<br/>(model + local sandbox + tools)"]
         CWD[("cwd / SKILLS_DIR<br/>AGENTS.md + .agents/skills/")]
@@ -54,30 +54,26 @@ flowchart LR
     end
 
     Mem["GitHub issues<br/>(agent-idea: open=proposed,<br/>closed=rejected) — the memory"]
-    Pkgs[("node_modules/@flue/*<br/>+ this checkout")]
-    Docs["Flue docs + blueprint catalog<br/>(flueframework.com/docs/* · /cli/blueprints/*)"]
+    Flue[("context/flue (cloned)<br/>blueprints · docs · packages<br/>+ this checkout's matrix")]
     Bedrock["AWS Bedrock<br/>claude-sonnet-4-6"]
     Issue["New agent-idea issue<br/>(at most one per run)"]
 
     Cron --> Before
     Manual --> Before
     Agent -->|github_list_idea_issues| Mem
-    Agent -->|read| Pkgs
-    Agent -->|fetch_flue_doc| Docs
+    Agent -->|grep / read| Flue
     Agent --> Bedrock
     Agent -->|github_create_idea_issue| Issue
 ```
 
 ## What it reads and writes
 
-- **Reads (no token):** this checkout's example matrix (`README.md` table, each
-  `examples/*`) and installed Flue (`node_modules/@flue/*`) — plain filesystem
-  reads in the sandbox.
-- **Reads (typed tool):** Flue doc/guide pages **and the blueprint catalog**
-  (one implementation guide per integration Flue ships — the primary
-  coverage-gap source) via `fetch_flue_doc`, pinned to
-  `https://flueframework.com/docs/*` and `https://flueframework.com/cli/blueprints/*`
-  (the page list lives in the skill).
+- **Reads (no token, all local files):** this checkout's example matrix
+  (`README.md` table, each `examples/*`) and **Flue's repo cloned into
+  `context/flue`** — its live `blueprints/` (the primary coverage-gap source),
+  `apps/docs/` (the guide + CLI docs), and `packages/` (the `@flue/*` source),
+  alongside the pinned `node_modules/@flue/*`. The workflow clones Flue before
+  the run; the agent only `grep`/`read`s. No fetch tool, no pinned snapshot.
 - **Writes (typed tool):** lists and creates `agent-idea` issues via Octokit
   (`github_list_idea_issues`, `github_create_idea_issue`).
 
@@ -130,6 +126,9 @@ Auto-chaining `agent-idea` → `triage` is an explicit non-goal.
 cp .env.example .env   # set AWS_PROFILE, AWS_REGION, GITHUB_TOKEN, GITHUB_REPOSITORY
 npm ci
 npm test               # unit tests for the pure helpers
+# Clone Flue so the agent has its live blueprints/docs/packages on disk (CI does
+# this for you). Skip it and the skill falls back to node_modules/@flue/* only.
+git clone --depth 1 --filter=blob:none https://github.com/withastro/flue.git context/flue
 ./node_modules/.bin/flue run flue-ideation \
   --input '{"message":"Run scheduled ideation over this repo."}'
 ```
@@ -146,11 +145,10 @@ ideate-scheduled-actions/
 ├── AGENTS.md                                  # always-on framing
 ├── src/
 │   ├── agents/flue-ideation.ts                # pure wiring: model + sandbox + tools
-│   └── tools/
-│       ├── github/{github.ts,helpers.ts}      # list/create agent-idea issues
-│       └── flue/{docs.ts,helpers.ts}          # pinned doc fetcher
+│   └── tools/github/{github.ts,helpers.ts}    # list/create agent-idea issues
 ├── .agents/skills/flue-ideation/
 │   ├── SKILL.md                               # the procedure + charter
 │   └── references/issue-template.md           # the idea issue body shape
-└── .github/workflows/ideate.yml               # hourly cron → flue run
+├── .github/workflows/ideate.yml               # hourly cron → clone Flue → flue run
+└── context/flue/                              # Flue cloned at runtime (gitignored)
 ```

@@ -58,55 +58,38 @@ You have no memory between runs except the GitHub issues you have filed before.
    `repo = $GITHUB_REPOSITORY` (label defaults to `agent-idea`, openCap to 5). It
    returns `{ openCount, closedCount, atCap, open, closed }`.
 2. **Cheap-exit if capped.** If `atCap` is true, stop now and report that the
-   backlog is full — do **not** survey, fetch docs, or file anything. This keeps
-   a capped hour to a single API call and near-zero model cost.
+   backlog is full — do **not** survey or file anything. This keeps a capped hour
+   to a single API call and near-zero model cost.
 3. **Survey this repo (local filesystem — not the GitHub API).** This checkout is
    already on disk. Read with `grep`/`rg`/`read`:
    - the root `README.md` examples table (the example matrix) and `AGENTS.md`,
    - each `examples/*/README.md` and `examples/*/AGENTS.md`,
    so you know exactly which work-sources, code-hosts, triggers, and deploys are
    already covered.
-4. **Survey Flue's capabilities.** Three sources. Two are local (cheap) — do
-   them first; the third is fetched on demand.
-   - **Installed packages (local read):** list `node_modules/@flue/*` and read
-     their `package.json` / entry types to see what Flue actually ships at the
-     version this repo pins. Ground truth for *drift* (installed API vs. usage).
-   - **Blueprint catalog (via `fetch_flue_doc` — the primary coverage-gap
-     source).** Flue serves one implementation guide per integration it ships at
-     `https://flueframework.com/cli/blueprints/<slug>.md`. This is the
-     **definitive list of what Flue supports**; fetch the guides relevant to the
-     gaps you suspect, then diff against the example matrix from step 3. A
-     blueprint with no example demonstrating it is a candidate coverage gap.
-     - Generic **kind** guides: `channel.md`, `database.md`, `sandbox.md`,
-       `tooling.md` — start here to see the four kinds and their shape.
-     - **Named** blueprints (slug = the name after `<kind>--`):
-       - channels: `slack` `discord` `linear` `github` `stripe` `twilio`
-         `whatsapp` `telegram` `teams` `notion` `intercom` `zendesk` `shopify`
-         `resend` `messenger` `google-chat` `salesforce-marketing-cloud`
-       - databases: `postgres` `mysql` `mongodb` `redis` `valkey` `libsql`
-         `turso` `supabase`
-       - sandboxes: `daytona` `e2b` `modal` `vercel` `cloudflare`
-         `cloudflare-shell` `boxd` `exedev` `islo` `mirage`
-       - tooling: `sentry` `braintrust` `vitest-evals`
-     (Don't fetch all of them every run — pull the kind guides plus the few
-     named ones a suspected gap needs.)
-   - **Docs (via `fetch_flue_doc`):** fetch the pages below for intent and
-     recommended patterns — and to spot **doc/example mismatches**. Fetch only
-     what you need (don't pull all of them every run).
-     - `https://flueframework.com/docs/getting-started/quickstart/`
-     - `https://flueframework.com/docs/ecosystem/channels/`
-     - `https://flueframework.com/docs/ecosystem/deploy/`
-     - `https://flueframework.com/docs/guide/building-agents/index.md`
-     - `https://flueframework.com/docs/guide/actions/index.md`
-     - `https://flueframework.com/docs/guide/models/index.md`
-     - `https://flueframework.com/docs/guide/tools/index.md`
-     - `https://flueframework.com/docs/guide/skills/index.md`
-     - `https://flueframework.com/docs/guide/subagents/index.md`
-     - `https://flueframework.com/docs/guide/sandboxes/index.md`
-     - `https://flueframework.com/docs/guide/channels/index.md`
-     - `https://flueframework.com/docs/cli/run/index.md`
-     (Edit these lists for your org. The fetch tool refuses any URL outside
-     `flueframework.com/docs/` and `flueframework.com/cli/blueprints/`.)
+4. **Survey Flue's capabilities (all local — Flue's repo is cloned on disk).**
+   The workflow shallow-clones Flue's public repo into `./context/flue` before
+   the run, so everything below is a `grep`/`rg`/`read`, no network. (If
+   `./context/flue` is missing — e.g. a local run without the clone step — say so
+   and fall back to `node_modules/@flue/*` only.) Three sources:
+   - **Blueprint catalog (`context/flue/blueprints/` — the primary coverage-gap
+     source).** One Markdown guide per integration Flue ships, named
+     `<kind>--<name>.md` (e.g. `channel--linear.md`, `database--postgres.md`,
+     `sandbox--daytona.md`), plus generic `<kind>.md` guides — `kind` is one of
+     `channel`, `database`, `sandbox`, `tooling`. This is the **definitive,
+     always-current list of what Flue supports**: `ls`/`grep` the directory, then
+     diff against the example matrix from step 3. A blueprint with no example
+     demonstrating it is a candidate coverage gap. (No hardcoded list here — read
+     whatever the directory currently holds, so new integrations are picked up
+     automatically.)
+   - **Package source (`context/flue/packages/` and `node_modules/@flue/*`).**
+     The cloned `packages/` is Flue's live source; `node_modules/@flue/*` is the
+     version this repo actually pins. Compare them for **drift** (an API/pattern
+     the installed version exposes that the examples don't use yet).
+   - **Docs (`context/flue/apps/docs/src/content/docs/`).** The full doc set,
+     including `guide/building-agents.md`, `guide/actions.md`, `guide/models.md`,
+     `guide/tools.md`, `guide/skills.md`, `guide/subagents.md`,
+     `guide/sandboxes.md`, `guide/channels.md`, and the CLI reference. Read these
+     for intent and recommended patterns, and to spot **doc/example mismatches**.
 5. **Find the gap.** Compute, within the charter: coverage gaps (Flue capability
    with no matching example), doc/example mismatches, then drift. Pick the
    **single highest-value** candidate.

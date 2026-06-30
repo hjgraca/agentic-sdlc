@@ -91,6 +91,17 @@ jobs:
           mkdir -p ./skills && (cd ./skills && npx -y skills add "https://github.com/${SKILLS_REPO}" -a universal -y)
           echo "SKILLS_DIR=$GITHUB_WORKSPACE/skills" >> "$GITHUB_ENV"
 
+      # Clone Flue's public repo so the agent surveys its LIVE capabilities —
+      # blueprints, docs, and @flue/* package source — as local files (no fetch
+      # tool, no pinned snapshot). Shallow + blobless keeps it ~20MB / a few
+      # seconds. `context/` is the repo's gitignored convention for upstream
+      # reference checkouts. Pinned action-free: plain git over HTTPS, public repo.
+      - name: Clone Flue (live reference for the agent)
+        run: |
+          rm -rf context/flue
+          git clone --depth 1 --filter=blob:none \
+            https://github.com/withastro/flue.git context/flue
+
       - name: Run ideation agent
         # All workflow context reaches the step through env vars (never
         # interpolated directly into the shell). The agent reads the repo to

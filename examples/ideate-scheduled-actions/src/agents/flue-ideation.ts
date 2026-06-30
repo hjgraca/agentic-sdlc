@@ -1,7 +1,6 @@
 import { defineAgent } from '@flue/runtime';
 import { local } from '@flue/runtime/node';
 import * as githubTools from '../tools/github/github.ts';
-import * as flueTools from '../tools/flue/docs.ts';
 
 // Skills and AGENTS.md are discovered by Flue at init time from the sandbox cwd:
 // `<cwd>/.agents/skills/<name>/SKILL.md` and `<cwd>/AGENTS.md`. No imports, no
@@ -14,13 +13,16 @@ import * as flueTools from '../tools/flue/docs.ts';
 // is the entry point. (Contrast triage-github-actions, which is label-triggered;
 // this is the repo's first SCHEDULED example.)
 //
-// The agent reads two things from the local sandbox filesystem (no tool needed):
-// the example matrix (this checkout) and installed Flue (node_modules/@flue/*).
-// Its only outbound tools are GitHub (list/create issues) and a doc fetcher.
+// All of the agent's INPUTS are local filesystem reads — no fetch tool. The
+// workflow shallow-clones Flue's public repo into ./context/flue before the run
+// (the repo's gitignored `context/` convention for upstream reference), so the
+// agent greps Flue's live blueprints, docs, and @flue/* package source on disk
+// alongside this checkout's example matrix. Its only OUTBOUND tools are GitHub
+// (list/create the agent-idea issues).
 const cwd = process.env.SKILLS_DIR ?? process.cwd();
 
 export default defineAgent(() => ({
 	model: 'amazon-bedrock/us.anthropic.claude-sonnet-4-6',
 	sandbox: local({ cwd }),
-	tools: [...Object.values(githubTools), ...Object.values(flueTools)],
+	tools: Object.values(githubTools),
 }));
