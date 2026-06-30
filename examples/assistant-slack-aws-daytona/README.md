@@ -46,6 +46,65 @@ another provider) is compute. See the
 [architecture doc](../../docs/aws-claude-tag-architecture.md) for how each
 behavior maps to AWS primitives and the alternatives considered.
 
+## How the agent is wired (model + sandbox)
+
+The whole agent is **three lines of pure wiring** in
+[`src/agents/assistant.ts`](src/agents/assistant.ts) — no prose, no procedure
+(that lives in `AGENTS.md` + the skill):
+
+```ts
+export default defineAgent(({ id }) => ({
+  model:   process.env.CHANNEL_MODEL ?? 'amazon-bedrock/us.anthropic.claude-sonnet-4-6',
+  sandbox: sandboxProvider().forChannel(id),          // id = the conversation key
+  tools:   allowedFromEnv().map((t) => TOOL_FACTORIES[t]()),
+}));
+```
+
+### Model
+
+The model is a one-line Flue model specifier, defaulting to **Bedrock Claude
+Sonnet** (`amazon-bedrock/us.anthropic.claude-sonnet-4-6`). It is overridable
+**per channel**: the consumer reads a channel's config from S3 and injects
+`CHANNEL_MODEL` for that turn (see [Governance](#governance-per-channel-scoping)),
+so one channel can run a different model with no redeploy. Bedrock auth is
+ambient — the consumer Lambda's IAM role grants `bedrock:InvokeModel`; there is
+no API key.
+
+### Sandbox — provisioned in three layers
+
+`sandbox: sandboxProvider().forChannel(id)` is what stands up compute for a
+conversation. The app talks to a `SandboxProvider` **interface** and never names
+a backend; provisioning is split across three files so swapping backends is one
+env var:
+
+1. **Select** — [`src/sandbox/registry.ts`](src/sandbox/registry.ts): the
+   `SANDBOX_PROVIDER` env var picks `local` (default), `daytona`, or `ec2-ssm`.
+2. **Provision (lifecycle)** —
+   [`src/sandbox/providers/daytona.ts`](src/sandbox/providers/daytona.ts): this
+   is where a box is actually created. `boxForChannel(channelKey)` **lists**
+   Daytona sandboxes labelled `flue-channel:<channelKey>` and **reuses** a
+   running one (starting it if stopped), or **`create`s** a fresh box with
+   `autoStop` (15 min) / `autoDelete` (60 min) so idle boxes self-reap. Net
+   effect: **one persistent remote Linux box per conversation**, created lazily
+   on first use, keyed by label.
+3. **Translate** —
+   [`src/sandbox/providers/daytona-adapter.ts`](src/sandbox/providers/daytona-adapter.ts):
+   maps Flue's 9-method `SandboxApi` (`exec` + fs) onto the `@daytona/sdk`, then
+   wraps it with `createSandboxSessionEnv(api, cwd)`. It owns translation only,
+   never lifecycle — that separation is the point.
+
+**Why per-conversation create-or-reuse is race-free:** Daytona's list-by-label is
+eventually consistent (~1–2 s), so a naive reuse could double-create under
+concurrency. The guard isn't in the provider — it's that **SQS FIFO
+(`MessageGroupId=conversationId`) serializes turns per conversation**, so two
+turns for one conversation never run at once. The provider leans on that upstream
+guarantee. `DAYTONA_API_KEY` is read once per warm container from Secrets Manager
+and injected into the `flue run` subprocess only when the daytona provider is
+active.
+
+Adding a new backend (k8s, a SaaS sandbox, …) = implement the 9-method
+`SandboxApi`, expose a `forChannel`, and add one line to `registry.ts`.
+
 ## Memory: keyed per conversation (thread)
 
 The agent instance id **is** the conversation id `conv:<team>:<channel>:<rootTs>`
