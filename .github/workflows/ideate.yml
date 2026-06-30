@@ -1,0 +1,132 @@
+# Repo-root copy of examples/ideate-scheduled-actions/.github/workflows/ideate.yml.
+#
+# GitHub only runs workflows from `.github/workflows/` at the repo root on the
+# default branch — a workflow nested under examples/ never fires. So this repo
+# dogfoods the ideation agent by running it from here, with every `run:` step
+# executing inside the example dir via `defaults.run.working-directory`. The
+# example keeps its own copy of this file so it still works when cloned
+# standalone (the clone-one-folder convention); this root copy is what actually
+# ideates over THIS repo. Keep the two in sync.
+#
+# Once an hour the agent surveys this repo's examples against Flue's
+# capabilities and files at most one `agent-idea` issue. The workflow IS the
+# trigger — there is no Flue channel here (contrast @flue/github's
+# createGitHubChannel webhook server). This is the repo's first SCHEDULED
+# example; label-triggered triage.yml is its sibling.
+#
+# Cadence is the cost/noise dial: `0 * * * *` is hourly; widen to `0 */4 * * *`
+# etc. to run less often. NOTE: GitHub disables scheduled workflows after 60 days
+# of repo inactivity (a feature here — a dead repo stops nagging itself) and cron
+# is best-effort (a tick can be delayed under load). The concurrency group below
+# makes the agent a singleton so a delayed tick never races a running one.
+#
+# Bedrock auth uses GitHub OIDC — NO long-lived AWS keys. The job mints a
+# short-lived OIDC token (`id-token: write`) and assumes a Bedrock-only IAM role
+# via aws-actions/configure-aws-credentials; that role's trust policy must allow
+# this repo's OIDC subject (token.actions.githubusercontent.com).
+#
+# Repository variables (Settings → Secrets and variables → Actions → Variables):
+#   AWS_ROLE_ARN — the role to assume, scoped to bedrock:InvokeModel on the `us.`
+#                  inference profile only (see AGENTS.md Bedrock gotcha).
+#   AWS_REGION   — the Bedrock region, e.g. us-west-2.
+# No model secret to store — that's the point of OIDC.
+#   GITHUB_TOKEN — provided automatically by Actions; the `permissions:` block
+#                  below scopes what it can do.
+# Optional repository variable:
+#   SKILLS_REPO  — Skills Project repo ("owner/repo") to fetch on its own release
+#                  cycle; omit to use the committed .agents/skills/.
+#
+# Prerequisite: the `agent-idea` label must exist in the repo before the first
+# run (creating an issue does not auto-create labels).
+name: Scheduled Ideation
+
+on:
+  schedule:
+    # Hourly, on the hour. Cadence is the cost/noise dial — see the header note.
+    - cron: '0 * * * *'
+  # Manual runs for testing/dogfooding; the concurrency group keeps a manual run
+  # from colliding with a scheduled tick.
+  workflow_dispatch:
+
+# Singleton: only one ideation run at a time. Without this, a delayed scheduled
+# tick (or a manual run) could overlap a running one — both would read the same
+# pre-file memory and file a duplicate, defeating the dedup design.
+# cancel-in-progress: false — let an in-flight run finish filing rather than kill
+# it mid-issue-creation.
+concurrency:
+  group: ideate
+  cancel-in-progress: false
+
+jobs:
+  ideate:
+    runs-on: ubuntu-latest
+    # The agent reads examples + docs and writes one issue; give it room.
+    timeout-minutes: 30
+    permissions:
+      id-token: write # mint the OIDC token used to assume the AWS Bedrock role
+      contents: read # read the checkout (example matrix, node_modules/@flue/*)
+      issues: write # list and create `agent-idea` issues
+    # Every `run:` step executes inside the example app, which holds the Flue
+    # project (package.json, flue.config.ts, .agents/skills/). Action steps
+    # (checkout/setup-node/OIDC) ignore this and run at the repo root.
+    defaults:
+      run:
+        working-directory: examples/ideate-scheduled-actions
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      # --ignore-scripts: install pinned deps without running dependency
+      # lifecycle scripts (no arbitrary install-time code).
+      - run: npm ci --ignore-scripts
+
+      # Assume the Bedrock-only IAM role via GitHub OIDC. This exports
+      # AWS_REGION + short-lived AWS_ACCESS_KEY_ID/SECRET/SESSION_TOKEN into the
+      # job env, which the Bedrock SDK picks up automatically — no stored keys.
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      # Optional: fetch the Skills Project from its OWN repo (separate release
+      # cycle from this agent) via skills.sh, then point Flue's sandbox cwd at it
+      # (Flue discovers $SKILLS_DIR/.agents/skills/ at init()). `-a universal`
+      # installs straight to .agents/skills/, so no symlink bridge is needed. Set
+      # the SKILLS_REPO repository variable to enable; omit it to fall back to
+      # the committed .agents/skills/. GITHUB_TOKEN authenticates the clone of a
+      # private skills repo via an insteadOf rewrite.
+      - name: Fetch skills (optional, separate release cycle)
+        if: vars.SKILLS_REPO != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SKILLS_REPO: ${{ vars.SKILLS_REPO }}
+        run: |
+          git config --global url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf "https://github.com/"
+          mkdir -p ./skills && (cd ./skills && npx -y skills add "https://github.com/${SKILLS_REPO}" -a universal -y)
+          echo "SKILLS_DIR=$GITHUB_WORKSPACE/examples/ideate-scheduled-actions/skills" >> "$GITHUB_ENV"
+
+      - name: Run ideation agent
+        # All workflow context reaches the step through env vars (never
+        # interpolated directly into the shell). The agent reads the repo to
+        # ideate over from GITHUB_REPOSITORY.
+        env:
+          # Model credential — AWS Bedrock (model amazon-bedrock/us.anthropic.
+          # claude-sonnet-4-6). The OIDC step above already exported the
+          # short-lived AWS_* env vars, so nothing to set here.
+          # Outbound GitHub auth for the agent's Octokit tools. The default
+          # GITHUB_TOKEN is scoped by the `permissions:` block above.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        # `flue run` input must be an object with a string "message"; it is just
+        # a wake signal here — the skill ideates over $GITHUB_REPOSITORY. The
+        # message is a constant, so there is no untrusted context to interpolate.
+        run: |
+          ./node_modules/.bin/flue run flue-ideation \
+            --input '{"message":"Run scheduled ideation over this repo."}'
+
+# NOTE: we intentionally do NOT use `local({ env })` to forward secrets into the
+# sandbox. Our tools are typed defineTool functions (Octokit + a pinned doc
+# fetch) that read process.env in the host Node process — the model never gets a
+# shell or the token, so there is nothing to forward.
