@@ -120,4 +120,4 @@ suggested folder name following the repo's `<function>-<primary-stack>` rule.
 A human reviews `agent-idea` issues and, for good ones, relabels them `triage`,
 which a separate triage agent then picks up. **You never apply `triage`
 yourself** and you never act on an idea beyond filing it — the human is the
-quality gate (see the repo's ADR on the human-gated hand-off).
+quality gate, and auto-chaining `agent-idea` → `triage` is a deliberate non-goal.

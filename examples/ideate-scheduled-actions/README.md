@@ -96,7 +96,7 @@ Out of charter: freeform product ideas and lint nits.
 
 - **The issue tracker is the agent's whole memory.** Open `agent-idea` =
   already proposed; **closed `agent-idea` = a human rejected it, never
-  re-propose** (see [ADR 0001](../../docs/adr/0001-issue-tracker-as-ideation-memory.md)).
+  re-propose.** No external state store, so the example stays pure-GitHub.
 - **Cap: 5 open ideas.** At the cap the agent exits cheaply (one API call, near
   zero model cost) before any survey or doc fetch.
 - **One issue per run, max.** Even below the cap, it files only its single best
@@ -107,8 +107,7 @@ Out of charter: freeform product ideas and lint nits.
 A human reviews `agent-idea` issues and relabels the good ones `triage`; the
 existing [`triage`](../triage-github-actions/) workflow then enriches them. The
 ideation agent never applies `triage` itself — the human is the quality gate.
-Auto-chaining `agent-idea` → `triage` is an explicit non-goal
-([ADR 0002](../../docs/adr/0002-human-gated-idea-to-triage-handoff.md)).
+Auto-chaining `agent-idea` → `triage` is an explicit non-goal.
 
 ## Setup
 
