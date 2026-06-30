@@ -19,6 +19,7 @@ jobs:
         example:
           - triage-github-actions
           - github-pr-label-actions
+          - ideate-scheduled-actions
     defaults:
       run:
         working-directory: examples/${{ matrix.example }}
