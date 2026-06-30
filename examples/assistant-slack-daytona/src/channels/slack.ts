@@ -15,10 +15,10 @@ import assistant from '../agents/assistant.ts';
  * check passes. SLACK_BOT_TOKEN authenticates outbound calls. Both come from
  * the environment at runtime — never hardcode them.
  */
-export const client = new WebClient(process.env.SLACK_BOT_TOKEN);
+export const client = new WebClient(requiredEnv('SLACK_BOT_TOKEN'));
 
 export const channel = createSlackChannel({
-	signingSecret: process.env.SLACK_SIGNING_SECRET!,
+	signingSecret: requiredEnv('SLACK_SIGNING_SECRET'),
 
 	// Path: /channels/slack/events. Returning `undefined` yields Slack's default
 	// empty 200 ack; the handler's job is the dispatch side effect, not a body.
@@ -82,4 +82,14 @@ export function replyInThread(ref: { channelId: string; threadTs: string }) {
 			};
 		},
 	});
+}
+
+/**
+ * Fail fast at startup if a required secret is missing, rather than
+ * constructing a client with `undefined` and erroring on the first API call.
+ */
+function requiredEnv(name: string): string {
+	const value = process.env[name];
+	if (!value) throw new Error(`${name} is required.`);
+	return value;
 }
