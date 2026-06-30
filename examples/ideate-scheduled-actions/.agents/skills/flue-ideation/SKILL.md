@@ -66,16 +66,37 @@ You have no memory between runs except the GitHub issues you have filed before.
    - each `examples/*/README.md` and `examples/*/AGENTS.md`,
    so you know exactly which work-sources, code-hosts, triggers, and deploys are
    already covered.
-4. **Survey Flue's capabilities.** Two sources:
+4. **Survey Flue's capabilities.** Three sources, cheapest first:
+   - **Blueprint catalog (local read — START HERE).** `references/blueprints/` is
+     a pinned snapshot of Flue's blueprint catalog: one Markdown guide per
+     integration Flue ships, grouped by `kind` in the JSON frontmatter —
+     `channel` (Slack, Discord, Linear, GitHub, Stripe, Twilio, WhatsApp, …),
+     `database` (Postgres, MongoDB, Redis, Turso, …), `sandbox` (Daytona, E2B,
+     Modal, Vercel, Cloudflare, …), and `tooling` (Sentry, Braintrust,
+     vitest-evals). This is the **definitive list of what Flue supports** and the
+     primary coverage-gap source: `grep`/`read` it, then diff against the example
+     matrix from step 3. A `channel--<x>.md` / `database--<x>.md` /
+     `sandbox--<x>.md` with no example demonstrating it is a candidate gap. See
+     `references/blueprints/SNAPSHOT.md` for provenance.
    - **Installed packages (local read):** list `node_modules/@flue/*` and read
      their `package.json` / entry types to see what Flue actually ships at the
-     version this repo pins. This is ground truth.
+     version this repo pins. Ground truth for *drift* (installed API vs. usage).
    - **Docs (via `fetch_flue_doc`):** fetch the pages below for intent and
-     recommended patterns. Fetch only what you need; each must be under
+     recommended patterns — and to spot **doc/example mismatches**. Fetch only
+     what you need (don't pull all of them every run); each must be under
      `https://flueframework.com/docs/`.
      - `https://flueframework.com/docs/getting-started/quickstart/`
      - `https://flueframework.com/docs/ecosystem/channels/`
      - `https://flueframework.com/docs/ecosystem/deploy/`
+     - `https://flueframework.com/docs/guide/building-agents/index.md`
+     - `https://flueframework.com/docs/guide/actions/index.md`
+     - `https://flueframework.com/docs/guide/models/index.md`
+     - `https://flueframework.com/docs/guide/tools/index.md`
+     - `https://flueframework.com/docs/guide/skills/index.md`
+     - `https://flueframework.com/docs/guide/subagents/index.md`
+     - `https://flueframework.com/docs/guide/sandboxes/index.md`
+     - `https://flueframework.com/docs/guide/channels/index.md`
+     - `https://flueframework.com/docs/cli/run/index.md`
      (Edit this list for your org. The fetch tool refuses any non-docs URL.)
 5. **Find the gap.** Compute, within the charter: coverage gaps (Flue capability
    with no matching example), doc/example mismatches, then drift. Pick the

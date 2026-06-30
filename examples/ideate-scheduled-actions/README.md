@@ -71,9 +71,11 @@ flowchart LR
 ## What it reads and writes
 
 - **Reads (no token):** this checkout's example matrix (`README.md` table, each
-  `examples/*`) and installed Flue (`node_modules/@flue/*`) — plain filesystem
-  reads in the sandbox.
-- **Reads (typed tool):** a small set of Flue doc pages via `fetch_flue_doc`,
+  `examples/*`), installed Flue (`node_modules/@flue/*`), and the **pinned
+  blueprint catalog** in the skill's `references/blueprints/` (one guide per Flue
+  integration — the primary coverage-gap source; see its `SNAPSHOT.md` for
+  provenance) — all plain filesystem reads in the sandbox.
+- **Reads (typed tool):** a set of Flue doc/guide pages via `fetch_flue_doc`,
   pinned to `https://flueframework.com/docs/*` (the page list lives in the
   skill).
 - **Writes (typed tool):** lists and creates `agent-idea` issues via Octokit
@@ -150,6 +152,10 @@ ideate-scheduled-actions/
 │       └── flue/{docs.ts,helpers.ts}          # pinned doc fetcher
 ├── .agents/skills/flue-ideation/
 │   ├── SKILL.md                               # the procedure + charter
-│   └── references/issue-template.md           # the idea issue body shape
+│   └── references/
+│       ├── issue-template.md                  # the idea issue body shape
+│       └── blueprints/                        # pinned Flue blueprint catalog
+│           ├── SNAPSHOT.md                    #   provenance + refresh command
+│           └── *.md                           #   one guide per Flue integration
 └── .github/workflows/ideate.yml               # hourly cron → flue run
 ```
