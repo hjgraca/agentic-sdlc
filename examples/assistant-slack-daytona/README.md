@@ -128,6 +128,15 @@ flowchart LR
    `reply_in_slack_thread` — bound to that thread, so the model never handles
    channel ids or timestamps.
 
+> **Delivery dedup is the deploy platform's job.** Slack retries failed or slow
+> Events API deliveries, so a single mention can arrive more than once. This
+> example forwards `payload.event_id` into the dispatch input but does **not**
+> claim it before dispatching — so on its own, a retry can trigger a duplicate
+> turn (and duplicate sandbox work). Per-channel serialization is delegated to
+> the deploy platform: the AWS variant fronts dispatch with an SQS-FIFO queue +
+> DynamoDB lease keyed by channel. If you run this standalone, claim
+> `event_id` in durable storage before `dispatch()` to guarantee exactly-once.
+
 ## Setup
 
 ```bash
