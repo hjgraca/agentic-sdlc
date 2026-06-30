@@ -55,7 +55,7 @@ flowchart LR
 
     Mem["GitHub issues<br/>(agent-idea: open=proposed,<br/>closed=rejected) — the memory"]
     Pkgs[("node_modules/@flue/*<br/>+ this checkout")]
-    Docs["Flue docs<br/>(flueframework.com/docs/*)"]
+    Docs["Flue docs + blueprint catalog<br/>(flueframework.com/docs/* · /cli/blueprints/*)"]
     Bedrock["AWS Bedrock<br/>claude-sonnet-4-6"]
     Issue["New agent-idea issue<br/>(at most one per run)"]
 
@@ -71,13 +71,13 @@ flowchart LR
 ## What it reads and writes
 
 - **Reads (no token):** this checkout's example matrix (`README.md` table, each
-  `examples/*`), installed Flue (`node_modules/@flue/*`), and the **pinned
-  blueprint catalog** in the skill's `references/blueprints/` (one guide per Flue
-  integration — the primary coverage-gap source; see its `SNAPSHOT.md` for
-  provenance) — all plain filesystem reads in the sandbox.
-- **Reads (typed tool):** a set of Flue doc/guide pages via `fetch_flue_doc`,
-  pinned to `https://flueframework.com/docs/*` (the page list lives in the
-  skill).
+  `examples/*`) and installed Flue (`node_modules/@flue/*`) — plain filesystem
+  reads in the sandbox.
+- **Reads (typed tool):** Flue doc/guide pages **and the blueprint catalog**
+  (one implementation guide per integration Flue ships — the primary
+  coverage-gap source) via `fetch_flue_doc`, pinned to
+  `https://flueframework.com/docs/*` and `https://flueframework.com/cli/blueprints/*`
+  (the page list lives in the skill).
 - **Writes (typed tool):** lists and creates `agent-idea` issues via Octokit
   (`github_list_idea_issues`, `github_create_idea_issue`).
 
@@ -151,10 +151,6 @@ ideate-scheduled-actions/
 │       └── flue/{docs.ts,helpers.ts}          # pinned doc fetcher
 ├── .agents/skills/flue-ideation/
 │   ├── SKILL.md                               # the procedure + charter
-│   └── references/
-│       ├── issue-template.md                  # the idea issue body shape
-│       └── blueprints/                        # pinned Flue blueprint catalog
-│           ├── SNAPSHOT.md                    #   provenance + refresh command
-│           └── *.md                           #   one guide per Flue integration
+│   └── references/issue-template.md           # the idea issue body shape
 └── .github/workflows/ideate.yml               # hourly cron → flue run
 ```

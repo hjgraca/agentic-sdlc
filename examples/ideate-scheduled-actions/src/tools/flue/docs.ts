@@ -10,10 +10,12 @@ import { checkDocUrl } from './helpers.ts';
  * outbound call in this repo, is a typed defineTool wrapping fetch() in the host
  * Node process. The model never gets an arbitrary fetcher.
  *
- * `fetch_flue_doc` is pinned to https://flueframework.com/docs/* by checkDocUrl
- * so it cannot be turned into a general web-scraper. The specific list of pages
- * worth reading (quickstart, ecosystem/channels, ecosystem/deploy, …) lives in
- * the flue-ideation skill, so it is editable without a rebuild.
+ * `fetch_flue_doc` is pinned by checkDocUrl to two Flue surfaces —
+ * https://flueframework.com/docs/* and the blueprint catalog at
+ * https://flueframework.com/cli/blueprints/* (one implementation guide per
+ * integration `flue add` supports) — so it cannot be turned into a general
+ * web-scraper. The specific list of pages worth reading lives in the
+ * flue-ideation skill, so it is editable without a rebuild.
  *
  * The other two inputs the agent uses — this repo's examples and installed Flue
  * (node_modules/@flue/*) — are local filesystem reads via the sandbox, not tools.
@@ -21,12 +23,12 @@ import { checkDocUrl } from './helpers.ts';
 export const fetchDoc = defineTool({
 	name: 'fetch_flue_doc',
 	description:
-		'Fetch one Flue documentation page as text, to learn what Flue offers (channels, tools, deploys, patterns). URL must be under https://flueframework.com/docs/. The skill lists which pages to read. Returns the page text, or an error string if the URL is not an allowed docs URL or the fetch fails.',
+		'Fetch one Flue page as text, to learn what Flue offers (channels, tools, deploys, patterns, and the per-integration blueprint guides). URL must be under https://flueframework.com/docs/ or https://flueframework.com/cli/blueprints/. The skill lists which pages to read. Returns the page text, or an error string if the URL is not allowed or the fetch fails.',
 	input: v.object({ url: v.string() }),
 	run: async ({ input }) => {
 		const check = checkDocUrl(input.url);
 		if (!check.ok) {
-			return `Refusing to fetch: ${check.reason} Only Flue docs pages (https://flueframework.com/docs/...) are allowed.`;
+			return `Refusing to fetch: ${check.reason}`;
 		}
 		try {
 			const res = await fetch(check.url, {

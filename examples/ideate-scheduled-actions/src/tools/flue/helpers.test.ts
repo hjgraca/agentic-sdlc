@@ -3,8 +3,9 @@ import { test } from 'node:test';
 import { checkDocUrl } from './helpers.ts';
 
 // Run with: npm test  (node --test, no extra deps — see package.json).
-// These cover the doc-URL allowlist that keeps the fetch tool pinned to the Flue
-// docs and stops it from becoming a general web-scraper (SSRF surface).
+// These cover the URL allowlist that keeps the fetch tool pinned to the two Flue
+// surfaces (docs + the blueprint catalog) and stops it from becoming a general
+// web-scraper (SSRF surface).
 
 test('checkDocUrl accepts a real Flue docs URL', () => {
 	const r = checkDocUrl('https://flueframework.com/docs/ecosystem/channels/');
@@ -13,6 +14,16 @@ test('checkDocUrl accepts a real Flue docs URL', () => {
 		r.ok && r.url,
 		'https://flueframework.com/docs/ecosystem/channels/',
 	);
+});
+
+test('checkDocUrl accepts a blueprint catalog URL', () => {
+	for (const good of [
+		'https://flueframework.com/cli/blueprints/slack.md', // named blueprint
+		'https://flueframework.com/cli/blueprints/sandbox.md', // generic kind guide
+	]) {
+		const r = checkDocUrl(good);
+		assert.equal(r.ok, true, `expected "${good}" accepted`);
+	}
 });
 
 test('checkDocUrl rejects non-https schemes', () => {
@@ -37,11 +48,13 @@ test('checkDocUrl rejects other hosts and look-alike hosts', () => {
 	}
 });
 
-test('checkDocUrl rejects paths outside /docs/ on the right host', () => {
+test('checkDocUrl rejects paths outside the allowed prefixes on the right host', () => {
 	for (const bad of [
 		'https://flueframework.com/', // root
 		'https://flueframework.com/blog/post', // wrong section
 		'https://flueframework.com/docs', // missing trailing slash → not under /docs/
+		'https://flueframework.com/cli/', // /cli/ but not the blueprints subtree
+		'https://flueframework.com/cli/run', // a different /cli/ route
 	]) {
 		const r = checkDocUrl(bad);
 		assert.equal(r.ok, false, `expected "${bad}" rejected`);

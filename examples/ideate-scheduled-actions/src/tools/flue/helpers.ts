@@ -6,22 +6,23 @@
  */
 
 /**
- * The only host the doc fetcher will reach, and the path prefix it is pinned to.
+ * The only host the fetcher will reach, and the path prefixes it is pinned to.
  * Flue gives the agent no built-in web-fetch primitive; outbound HTTP is a typed
  * tool wrapping fetch(). We keep that tool from becoming a general web-scraper by
- * pinning it to the public Flue docs. The skill holds the specific list of doc
- * pages worth fetching; this is the hard boundary around them.
+ * pinning it to two public Flue surfaces: the docs and the blueprint catalog
+ * (the implementation guides `flue add` serves, one per integration). The skill
+ * holds the specific list of pages worth fetching; this is the hard boundary.
  */
 export const DOC_ORIGIN = 'https://flueframework.com';
-export const DOC_PATH_PREFIX = '/docs/';
+export const ALLOWED_PATH_PREFIXES = ['/docs/', '/cli/blueprints/'] as const;
 
 /**
- * Decide whether `url` is an allowed Flue docs URL. Rejects anything that is not
- * exactly `https://flueframework.com/docs/...` — wrong scheme, wrong host
- * (including look-alikes like `flueframework.com.evil.test`, which `startsWith`
- * checks alone would miss), or a path outside `/docs/`. Returns a discriminated
- * result so the tool can hand the model an actionable reason instead of fetching
- * something it shouldn't.
+ * Decide whether `url` is an allowed Flue URL. Rejects anything that is not
+ * `https://flueframework.com/{docs,cli/blueprints}/...` — wrong scheme, wrong
+ * host (including look-alikes like `flueframework.com.evil.test`, which
+ * `startsWith` checks alone would miss), or a path outside the allowed
+ * prefixes. Returns a discriminated result so the tool can hand the model an
+ * actionable reason instead of fetching something it shouldn't.
  */
 export function checkDocUrl(
 	url: string,
@@ -41,10 +42,10 @@ export function checkDocUrl(
 			reason: `Only ${DOC_ORIGIN} is allowed, got "${parsed.origin}".`,
 		};
 	}
-	if (!parsed.pathname.startsWith(DOC_PATH_PREFIX)) {
+	if (!ALLOWED_PATH_PREFIXES.some((p) => parsed.pathname.startsWith(p))) {
 		return {
 			ok: false,
-			reason: `Only paths under ${DOC_PATH_PREFIX} are allowed, got "${parsed.pathname}".`,
+			reason: `Only paths under ${ALLOWED_PATH_PREFIXES.join(' or ')} are allowed, got "${parsed.pathname}".`,
 		};
 	}
 	return { ok: true, url: parsed.toString() };
