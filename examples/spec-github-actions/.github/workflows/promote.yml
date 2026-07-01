@@ -1,0 +1,95 @@
+# Promote an APPROVED spec discussion into an issue. When a maintainer applies
+# the `approved` label to a discussion, this creates an Issue seeded with the
+# LATEST spec comment (the final, approved revision) and cross-links the two.
+#
+# This is DELIBERATELY model-free and token-only — no Bedrock, no OIDC. The
+# intelligence already happened in the spec interview; promotion is pure
+# mechanics (copy the approved comment into a new issue). The issue is born
+# INERT: it carries a passive `approved-spec` marker, NEVER a trigger label.
+# It is a human review checkpoint — a human later applies `implement` to hand it
+# to the build agent (a separate, future workflow). No agent auto-triggers here.
+#
+# Prerequisite: `approved` and `approved-spec` labels must exist in the repo.
+name: Promote Approved Spec
+
+on:
+  discussion:
+    types: [labeled]
+
+jobs:
+  promote:
+    if: github.event.label.name == 'approved'
+    runs-on: ubuntu-latest
+    permissions:
+      discussions: read # read the discussion + its comments
+      issues: write # create the seeded issue
+    steps:
+      # No checkout / node / model — just gh + jq, which the runner ships.
+      - name: Create an issue from the latest spec comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          DISCUSSION_NUMBER: ${{ github.event.discussion.number }}
+          DISCUSSION_URL: ${{ github.event.discussion.html_url }}
+          DISCUSSION_TITLE: ${{ github.event.discussion.title }}
+        run: |
+          set -euo pipefail
+          owner="${REPO%/*}"; repo="${REPO#*/}"
+
+          # Fetch the discussion's comments, newest last. The final spec is the
+          # last comment authored by the spec bot (login ends with "[bot]"), or
+          # failing that, the last comment overall. GraphQL (discussions have no
+          # REST); the body flows through jq/files, never interpolated as code.
+          gh api graphql -f query='
+            query($owner:String!, $repo:String!, $number:Int!){
+              repository(owner:$owner, name:$repo){
+                discussion(number:$number){
+                  comments(last:100){ nodes{ body author{ login } } }
+                }
+              }
+            }' -F owner="$owner" -F repo="$repo" -F number="$DISCUSSION_NUMBER" \
+            > comments.json
+
+          # Prefer the last bot-authored comment (the spec); else the last comment.
+          jq -r '[.data.repository.discussion.comments.nodes[]
+                  | select(.author.login | endswith("[bot]"))] | last // empty
+                 | .body' comments.json > spec_body.txt
+          if [ ! -s spec_body.txt ]; then
+            jq -r '.data.repository.discussion.comments.nodes | last // empty | .body' \
+              comments.json > spec_body.txt
+          fi
+          if [ ! -s spec_body.txt ]; then
+            echo "No comments on the discussion to promote — nothing to do."
+            exit 0
+          fi
+
+          # Assemble the issue body: provenance link + the approved spec. Written
+          # to a file and passed with --body-file so no content is interpolated
+          # into the shell.
+          {
+            printf 'Promoted from approved spec discussion: %s\n\n' "$DISCUSSION_URL"
+            printf 'Review this spec, then apply the `implement` label to hand it to the build agent.\n\n'
+            printf -- '---\n\n'
+            cat spec_body.txt
+          } > issue_body.md
+
+          url=$(gh issue create \
+            --repo "$REPO" \
+            --title "Spec: $DISCUSSION_TITLE" \
+            --label approved-spec \
+            --body-file issue_body.md)
+          echo "Created issue: $url"
+
+          # Cross-link back into the discussion so the thread points at the issue.
+          gh api graphql -f query='
+            query($owner:String!, $repo:String!, $number:Int!){
+              repository(owner:$owner, name:$repo){ discussion(number:$number){ id } }
+            }' -F owner="$owner" -F repo="$repo" -F number="$DISCUSSION_NUMBER" \
+            --jq '.data.repository.discussion.id' > disc_id.txt
+          gh api graphql -f query='
+            mutation($discussionId:ID!, $body:String!){
+              addDiscussionComment(input:{discussionId:$discussionId, body:$body}){
+                comment{ url }
+              }
+            }' -F discussionId="$(cat disc_id.txt)" \
+               -F body="Promoted to an issue for implementation review: $url"

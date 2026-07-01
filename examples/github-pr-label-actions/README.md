@@ -17,8 +17,9 @@ is the model's judgement *bounded by hard limits in the skill* (patch/minor only
 green CI, lockfile-only diff); the limits live in the skill, not the code, so you
 tune them without a rebuild.
 
-It is a sibling of [`triage-github-actions`](../triage-github-actions/): same
-one-shot Actions pattern, Bedrock model, and OIDC auth — different trigger (a PR
+It is a sibling of the other GitHub Actions examples (e.g.
+[`spec-github-actions`](../spec-github-actions/)): same one-shot Actions pattern,
+Bedrock model, and OIDC auth — different trigger (a PR
 label) and a different job (acting on PRs instead of triaging issues).
 
 ## How a label reaches the runner — and why it's safe
@@ -136,6 +137,7 @@ npm test               # unit tests for the pure helpers
 ## Trigger drives deploy
 
 This pairing — PR label → `pull_request_target` → one-shot runner — is the
-CI-driven path, the same shape as `triage-github-actions`. For an always-on
+CI-driven path, the same shape as the other GitHub Actions examples. For an
+always-on
 server reacting to PR events in real time, use Flue's official GitHub channel
 (`@flue/github`) on a long-running deploy instead. See [AGENTS.md](../../AGENTS.md).
