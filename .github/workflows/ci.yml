@@ -1,8 +1,14 @@
 # CI for the example apps: typecheck, build, and unit tests on every push/PR.
-# Separate from triage.yml (the runtime agent trigger) — this gates code health,
-# that one runs the agent. Matrix over the examples that ship a test script so
-# adding a new example is one line here. (matrix.example is workflow-controlled,
-# not external input, and is only used in paths — never in a run: shell string.)
+# Separate from the agent trigger workflows — this gates code health.
+#
+# The example list lives in .github/ci-examples.json (a DATA file), NOT inline
+# here. That is deliberate: the implement agent adds a new example to CI by
+# appending to that JSON with the default GITHUB_TOKEN, which cannot push changes
+# under .github/workflows/ (it lacks the `workflows` permission). Keeping the list
+# in a data file lets an agent-authored PR wire a new example into CI without a
+# broader token (see issue #60). The `discover` job reads the file; `test`
+# matrixes over it. The values are repo-controlled (a committed file), used only
+# in paths — never interpolated into a run: shell string.
 name: CI
 
 on:
@@ -11,17 +17,23 @@ on:
   pull_request:
 
 jobs:
+  discover:
+    runs-on: ubuntu-latest
+    outputs:
+      examples: ${{ steps.list.outputs.examples }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: list
+        # Emit the JSON array as a single-line output the matrix can fromJSON().
+        run: echo "examples=$(jq -c . .github/ci-examples.json)" >> "$GITHUB_OUTPUT"
+
   test:
+    needs: discover
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        example:
-          - spec-github-actions
-          - github-pr-label-actions
-          - ideate-scheduled-actions
-          - implement-github-actions
-          - triage-linear-lambda
+        example: ${{ fromJSON(needs.discover.outputs.examples) }}
     defaults:
       run:
         working-directory: examples/${{ matrix.example }}

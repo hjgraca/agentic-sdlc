@@ -21,7 +21,8 @@ non-draft PR, every item must hold. (If one can't, open a draft PR and say which
       `node:test` (no new deps): `node --test --experimental-strip-types "src/**/*.test.ts"`
 
 ## Wired into the repo (finish criteria)
-- [ ] Added to the CI matrix in the repo-root `.github/workflows/ci.yml`
+- [ ] Added to CI by appending the dir name to `.github/ci-examples.json` (NOT
+      by editing `.github/workflows/ci.yml` — the token can't push workflow files)
 - [ ] Row added to the root `README.md` examples table
 - [ ] The example's own `README.md` is accurate (flow diagram + shape)
 

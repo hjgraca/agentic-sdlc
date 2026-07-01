@@ -56,7 +56,7 @@ flowchart LR
     Spec["Issue body = the build order<br/>(approved build-ready spec)"]
     Flue[("context/flue (cloned)<br/>blueprints · packages · docs")]
     Bedrock["AWS Bedrock<br/>claude-sonnet-4-6"]
-    PR["Pull request<br/>(green → normal · red → draft)<br/>+ CI matrix line + README row"]
+    PR["Pull request<br/>(green → normal · red → draft)<br/>+ ci-examples.json entry + README row"]
 
     Label --> Event --> Before
     Agent -->|github_get_issue| Spec
@@ -80,7 +80,7 @@ It **always** leaves a summary comment on the issue (PR link + status), and
 gate.
 
 A **complete** PR is more than the folder: the agent also adds the example to the
-repo-root CI matrix and a row to the root README table (the `create-agent` finish
+repo-root CI example list (`.github/ci-examples.json`) and a row to the root README table (the `create-agent` finish
 criteria), so CI exercises the new example on the PR itself.
 
 ## Idempotency
