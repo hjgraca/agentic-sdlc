@@ -135,8 +135,15 @@ jobs:
           ./node_modules/.bin/flue run flue-spec \
             --input "$(printf '{"message":"Spec discussion %s#%s; triggered by @%s."}' "$REPO" "$DISCUSSION_NUMBER" "$TRIGGERED_BY")"
 
-      # 👍 on success / 👎 on failure — terminal reactions so the human sees the
-      # outcome on the comment without opening the Actions tab.
+      # Terminal state: 👀 meant "in progress", so clear it, then leave ONLY the
+      # outcome — 👍 success / 👎 failure — so the human sees the result on the
+      # comment without opening the Actions tab. Clearing runs on any outcome
+      # (`always()`); `|| true` tolerates the reaction already being absent.
+      - name: Clear 👀 (run finished)
+        if: always()
+        run: |
+          gh api graphql -f query='mutation($id:ID!){removeReaction(input:{subjectId:$id,content:EYES}){reaction{content}}}' -f id="$COMMENT_ID" || true
+
       - name: React 👍 (completed)
         if: success()
         run: |
