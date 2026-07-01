@@ -23,6 +23,7 @@ filters by what they have: work source, code host, trigger, and where it runs.
 | [`assistant-slack-aws-daytona`](examples/assistant-slack-aws-daytona/) | full Claude-Tag platform: memory, scheduling, governance, spec-interview | Slack | — | S3 memory · Daytona/pluggable sandbox · EventBridge | Slack Events API webhook | AWS (API GW + Lambda + SQS) | ✅ complete |
 | [`ideate-scheduled-actions`](examples/ideate-scheduled-actions/) | survey the examples vs Flue's features; open idea Discussions for the gaps | this repo | GitHub | Flue docs · `@flue/*` | schedule (hourly cron) | GitHub Actions | ✅ complete |
 | [`implement-github-actions`](examples/implement-github-actions/) | build an example from an approved spec, open a PR | GitHub | GitHub | sandbox (build/test) | `implement` label → `on: issues` | GitHub Actions | ✅ complete |
+| [`validate-github-actions`](examples/validate-github-actions/) | review an implementation PR against its approved spec; APPROVE / request changes | GitHub | GitHub | — | PR opened/updated → `on: pull_request` | GitHub Actions | ✅ complete |
 | [`triage-linear-lambda`](examples/triage-linear-lambda/) | triage a Linear issue comment, apply labels/assignee, post structured reply | Linear | — | AWS Bedrock | Linear webhook (Comment/create) | AWS Lambda (Function URL + ECR) | ✅ complete |
 
 Want triage on a different stack (e.g. Linear + GitLab + GitLab runners)? That's
