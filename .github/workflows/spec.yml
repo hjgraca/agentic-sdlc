@@ -15,7 +15,7 @@
 # cold; the agent re-reads the whole thread (its only memory). See ADR 0004.
 #
 # FAST FEEDBACK via lifecycle reactions on the triggering comment (deterministic,
-# no model): 👀 as the very first step (before checkout), 🚀 on success, 😕 on
+# no model): 👀 as the very first step (before checkout), 👍 on success, 👎 on
 # failure. This is workflow-level, not the agent's job — so feedback is instant
 # and covers early failures the agent never reaches.
 #
@@ -135,17 +135,17 @@ jobs:
           ./node_modules/.bin/flue run flue-spec \
             --input "$(printf '{"message":"Spec discussion %s#%s; triggered by @%s."}' "$REPO" "$DISCUSSION_NUMBER" "$TRIGGERED_BY")"
 
-      # 🚀 on success / 😕 on failure — terminal reactions so the human sees the
+      # 👍 on success / 👎 on failure — terminal reactions so the human sees the
       # outcome on the comment without opening the Actions tab.
-      - name: React 🚀 (completed)
+      - name: React 👍 (completed)
         if: success()
         run: |
-          gh api graphql -f query='mutation($id:ID!){addReaction(input:{subjectId:$id,content:ROCKET}){reaction{content}}}' -f id="$COMMENT_ID"
+          gh api graphql -f query='mutation($id:ID!){addReaction(input:{subjectId:$id,content:THUMBS_UP}){reaction{content}}}' -f id="$COMMENT_ID"
 
-      - name: React 😕 (failed)
+      - name: React 👎 (failed)
         if: failure()
         run: |
-          gh api graphql -f query='mutation($id:ID!){addReaction(input:{subjectId:$id,content:CONFUSED}){reaction{content}}}' -f id="$COMMENT_ID"
+          gh api graphql -f query='mutation($id:ID!){addReaction(input:{subjectId:$id,content:THUMBS_DOWN}){reaction{content}}}' -f id="$COMMENT_ID"
 
 # NOTE: we do NOT forward secrets into the sandbox via `local({ env })`. The
 # agent's tools are typed defineTool functions reading process.env in the host
