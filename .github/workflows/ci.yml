@@ -21,6 +21,7 @@ jobs:
           - github-pr-label-actions
           - ideate-scheduled-actions
           - implement-github-actions
+          - triage-linear-lambda
     defaults:
       run:
         working-directory: examples/${{ matrix.example }}
