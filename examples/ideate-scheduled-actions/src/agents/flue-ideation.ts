@@ -5,7 +5,7 @@ import * as githubTools from '../tools/github/github.ts';
 // Skills and AGENTS.md are discovered by Flue at init time from the sandbox cwd:
 // `<cwd>/.agents/skills/<name>/SKILL.md` and `<cwd>/AGENTS.md`. No imports, no
 // instructions field — the agent's framing lives in AGENTS.md, the procedure
-// (load memory → cap check → survey → find gap → dedup → file one) lives in the
+// (load memory → cap check → survey → find gap → dedup → open one) lives in the
 // flue-ideation skill.
 //
 // There is no channel: this example runs one-shot in GitHub Actions on an hourly
@@ -18,7 +18,7 @@ import * as githubTools from '../tools/github/github.ts';
 // (the repo's gitignored `context/` convention for upstream reference), so the
 // agent greps Flue's live blueprints, docs, and @flue/* package source on disk
 // alongside this checkout's example matrix. Its only OUTBOUND tools are GitHub
-// (list/create the agent-idea issues).
+// (list/create idea Discussions in the "Ideas" category — see ADR 0003).
 const cwd = process.env.SKILLS_DIR ?? process.cwd();
 
 export default defineAgent(() => ({
