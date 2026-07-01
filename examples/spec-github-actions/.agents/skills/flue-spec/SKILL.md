@@ -17,11 +17,11 @@ decisions** into one comment to limit round-trips.
 
 ## Your input
 
-The invocation `message` carries the discussion to work on and the login of the
-human whose comment triggered you, e.g.
-`Spec discussion acme/widgets#42; triggered by @alice`. Parse the `owner/repo`,
-the discussion number, and the triggering login. If the repo is omitted, default
-to `$GITHUB_REPOSITORY`.
+The invocation `message` carries the discussion to work on, the login of the
+human whose comment triggered you, and that comment's node id, e.g.
+`Spec discussion acme/widgets#42; triggered by @alice; triggering comment id DC_xxx`.
+Parse the `owner/repo`, the discussion number, the triggering login, and the
+comment id. If the repo is omitted, default to `$GITHUB_REPOSITORY`.
 
 ## Step 0 — Authorize (ALWAYS FIRST, before any model work)
 
@@ -45,6 +45,14 @@ comments** when judging what is new. Then decide:
 (If the discussion is **not** yet labelled `speccing` and the triggering comment
 does not `@`-mention you, do nothing — you are only kicked off by an explicit
 mention. Once `speccing` is present you respond to any permission-holder comment.)
+
+## Step 1b — Acknowledge fast (only when engaging or finalizing)
+
+As soon as you've decided to **engage** or **finalize** (i.e. NOT wait/exit),
+react 👀 to the triggering comment with `github_add_reaction` (the comment id is
+in the invocation message; content `EYES`). Do this *before* the grounding and
+model work below — the full reply takes a minute, and the reaction tells the
+human you picked it up. Skip it when you're exiting quietly (nothing to ack).
 
 ## Step 2 — Ground yourself in Flue's source (local, cheap)
 
