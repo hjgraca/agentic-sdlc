@@ -111,12 +111,13 @@ jobs:
           REPO: ${{ github.repository }}
           DISCUSSION_NUMBER: ${{ github.event.discussion.number }}
           TRIGGERED_BY: ${{ github.event.comment.user.login }}
+          COMMENT_ID: ${{ github.event.comment.node_id }}
         # `flue run` input is an object with a string "message"; the skill parses
         # the discussion ref + triggering login out of it. Built in-shell from
         # env vars so no untrusted context is interpolated into YAML.
         run: |
           ./node_modules/.bin/flue run flue-spec \
-            --input "$(printf '{"message":"Spec discussion %s#%s; triggered by @%s."}' "$REPO" "$DISCUSSION_NUMBER" "$TRIGGERED_BY")"
+            --input "$(printf '{"message":"Spec discussion %s#%s; triggered by @%s; triggering comment id %s."}' "$REPO" "$DISCUSSION_NUMBER" "$TRIGGERED_BY" "$COMMENT_ID")"
 
 # NOTE: we do NOT forward secrets into the sandbox via `local({ env })`. The
 # agent's tools are typed defineTool functions reading process.env in the host

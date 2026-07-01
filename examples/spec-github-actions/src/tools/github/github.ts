@@ -104,6 +104,14 @@ const LABEL_ID = `
 	}
 `;
 
+const ADD_REACTION = `
+	mutation ($subjectId: ID!, $content: ReactionContent!) {
+		addReaction(input: { subjectId: $subjectId, content: $content }) {
+			reaction { content }
+		}
+	}
+`;
+
 export const checkPermission = defineTool({
 	name: 'github_check_permission',
 	description:
@@ -130,6 +138,28 @@ export const checkPermission = defineTool({
 				authorized: false,
 				note: `permission lookup failed (treated as unauthorized): ${String(err)}`,
 			});
+		}
+	},
+});
+
+export const addReaction = defineTool({
+	name: 'github_add_reaction',
+	description:
+		'React to a discussion comment as a fast acknowledgment — use 👀 (EYES) on the triggering comment right after you decide to engage, so the human sees you picked it up before the full reply (which takes a minute). Pass the comment NODE id (from the invocation message) and a content of EYES (default), THUMBS_UP, ROCKET, etc.',
+	input: v.object({
+		subjectId: v.string(),
+		content: v.optional(v.string()),
+	}),
+	run: async ({ input }) => {
+		try {
+			const content = input.content ?? 'EYES';
+			await octokit.graphql(ADD_REACTION, {
+				subjectId: input.subjectId,
+				content,
+			});
+			return `Reacted ${content} to ${input.subjectId}`;
+		} catch (err) {
+			return `GitHub add reaction failed: ${String(err)}`;
 		}
 	},
 });
