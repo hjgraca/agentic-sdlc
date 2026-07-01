@@ -6,11 +6,16 @@
 
 This is the repo's **first scheduled example**. On an hourly cron, the agent runs
 **one-shot on a GitHub-hosted runner** (`flue run`), surveys this repo's example
-matrix against what Flue actually offers — its installed `@flue/*` packages and
-its docs — and, when it finds a genuinely new high-value gap, files **one**
-GitHub issue labelled `agent-idea` proposing what to build or fix next. Most
-hours it finds nothing new and **files zero issues** — that is the healthy
-default, not a failure.
+matrix against what Flue actually offers — its blueprints, `@flue/*` packages,
+and docs — and, when it finds a genuinely new high-value gap, opens **one**
+GitHub **Discussion** in the **"Ideas" category** proposing what to build or fix
+next. Most hours it finds nothing new and **opens zero discussions** — that is
+the healthy default, not a failure.
+
+Ideas are **Discussions, not issues**: an idea's whole pre-implementation life —
+this proposal, a spec interview, human iteration — lives in that one discussion
+thread. This example only *opens* the discussion; the spec agent and humans take
+it from there.
 
 It is the scheduled counterpart to
 [`triage-github-actions`](../triage-github-actions/): same one-shot
@@ -23,7 +28,7 @@ Flue ships official **channels** for the webhook→server path. This example
 deliberately takes the **other** path, like the other Actions examples: a
 GitHub-hosted runner is a one-shot CI executor with no always-on listener, so
 there is no Flue channel here. **GitHub Actions itself is the trigger** — but
-where the triage examples are triggered by an issue/PR event, this one is
+where the other Actions examples are triggered by an issue/PR event, this one is
 triggered by `on: schedule` (cron). (Scheduled triggers aren't in Flue's
 GitHub-Actions guide yet; the rest of the shape — `flue run`, OIDC→Bedrock,
 typed tools — is the documented pattern.)
@@ -32,10 +37,10 @@ typed tools — is the documented pattern.)
 Hourly cron tick (on: schedule)
   → GitHub-hosted runner (singleton via concurrency group)
   → npm ci → shallow-clone Flue's repo into context/flue → flue run flue-ideation
-  → agent lists `agent-idea` issues (its memory); if at cap (5 open) → exit cheap
+  → agent lists "Ideas" discussions (its memory); if at cap (5 open) → exit cheap
   → else: reads the example matrix + context/flue (blueprints, docs, packages) — all local
   → finds the highest-value gap, dedups vs open AND closed ideas
-  → files at most ONE `agent-idea` issue (or none) → exits
+  → opens at most ONE discussion in "Ideas" (or none) → exits
 ```
 
 ```mermaid
@@ -53,17 +58,17 @@ flowchart LR
         Before --> Run --> Agent
     end
 
-    Mem["GitHub issues<br/>(agent-idea: open=proposed,<br/>closed=rejected) — the memory"]
+    Mem['"Ideas" discussions<br/>(open=proposed,<br/>closed=rejected) — the memory']
     Flue[("context/flue (cloned)<br/>blueprints · docs · packages<br/>+ this checkout's matrix")]
     Bedrock["AWS Bedrock<br/>claude-sonnet-4-6"]
-    Issue["New agent-idea issue<br/>(at most one per run)"]
+    Disc['New idea Discussion<br/>in "Ideas" (≤ one per run)']
 
     Cron --> Before
     Manual --> Before
-    Agent -->|github_list_idea_issues| Mem
+    Agent -->|github_list_idea_discussions| Mem
     Agent -->|grep / read| Flue
     Agent --> Bedrock
-    Agent -->|github_create_idea_issue| Issue
+    Agent -->|github_create_idea_discussion| Disc
 ```
 
 ## What it reads and writes
@@ -74,8 +79,9 @@ flowchart LR
   `apps/docs/` (the guide + CLI docs), and `packages/` (the `@flue/*` source),
   alongside the pinned `node_modules/@flue/*`. The workflow clones Flue before
   the run; the agent only `grep`/`read`s. No fetch tool, no pinned snapshot.
-- **Writes (typed tool):** lists and creates `agent-idea` issues via Octokit
-  (`github_list_idea_issues`, `github_create_idea_issue`).
+- **Writes (typed tool):** lists and opens idea Discussions in the "Ideas"
+  category via Octokit's GraphQL API (`github_list_idea_discussions`,
+  `github_create_idea_discussion`) — Discussions have no REST API.
 
 ## The idea charter
 
@@ -90,28 +96,29 @@ Out of charter: freeform product ideas and lint nits.
 
 ## Memory, cap, and discipline
 
-- **The issue tracker is the agent's whole memory.** Open `agent-idea` =
-  already proposed; **closed `agent-idea` = a human rejected it, never
+- **The "Ideas" discussion category is the agent's whole memory.** Open
+  discussion = already proposed; **closed discussion = a human rejected it, never
   re-propose.** No external state store, so the example stays pure-GitHub.
 - **Cap: 5 open ideas.** At the cap the agent exits cheaply (one API call, near
-  zero model cost) before any survey or doc fetch.
-- **One issue per run, max.** Even below the cap, it files only its single best
-  idea per hour.
+  zero model cost) before any survey.
+- **One discussion per run, max.** Even below the cap, it opens only its single
+  best idea per hour.
 
-## The hand-off to triage (human-gated)
+## The hand-off to spec (human-gated)
 
-A human reviews `agent-idea` issues and relabels the good ones `triage`; the
-existing [`triage`](../triage-github-actions/) workflow then enriches them. The
-ideation agent never applies `triage` itself — the human is the quality gate.
-Auto-chaining `agent-idea` → `triage` is an explicit non-goal.
+Humans discuss the idea in the thread. When ready, a permission-holding human
+@-mentions the spec agent (`@flue-spec`) in the discussion to start a spec
+interview; that agent (a separate example) takes it from there. The ideation
+agent never invokes the spec agent itself — the human is the quality gate.
+Auto-chaining ideate → spec is an explicit non-goal.
 
 ## Setup
 
-1. **Create the `agent-idea` label** (one-time; creating an issue does not
-   auto-create labels):
-   ```bash
-   gh label create agent-idea --description "Filed by the scheduled ideation agent" --color BFD4F2
-   ```
+1. **Create an open-ended "Ideas" discussion category** (one-time; the API
+   creates discussions, not categories). In the repo: **Settings → General →
+   Features → Discussions** (enable), then **Discussions → categories → New
+   category** named `Ideas`, format **Open-ended discussion**. The agent resolves
+   the category by name at runtime, so no ID goes in config.
 2. **Bedrock via OIDC** — set repository variables `AWS_ROLE_ARN` (a Bedrock-only
    role whose trust policy allows this repo's OIDC subject) and `AWS_REGION`. See
    [docs/github-actions-bedrock-oidc.md](../../docs/github-actions-bedrock-oidc.md).
@@ -145,10 +152,10 @@ ideate-scheduled-actions/
 ├── AGENTS.md                                  # always-on framing
 ├── src/
 │   ├── agents/flue-ideation.ts                # pure wiring: model + sandbox + tools
-│   └── tools/github/{github.ts,helpers.ts}    # list/create agent-idea issues
+│   └── tools/github/{github.ts,helpers.ts}    # list/open idea Discussions (GraphQL)
 ├── .agents/skills/flue-ideation/
 │   ├── SKILL.md                               # the procedure + charter
-│   └── references/issue-template.md           # the idea issue body shape
+│   └── references/idea-template.md            # the idea discussion body shape
 ├── .github/workflows/ideate.yml               # hourly cron → clone Flue → flue run
 └── context/flue/                              # Flue cloned at runtime (gitignored)
 ```

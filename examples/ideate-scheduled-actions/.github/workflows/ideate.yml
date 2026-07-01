@@ -1,6 +1,6 @@
 # Scheduled ideation on a GitHub-hosted runner. Once an hour the agent surveys
-# this repo's examples against Flue's capabilities and files at most one
-# `agent-idea` issue. The workflow IS the trigger — there is no Flue channel
+# this repo's examples against Flue's capabilities and opens at most one
+# `agent-idea` Discussion in the "Ideas" category. The workflow IS the trigger — there is no Flue channel
 # here (contrast @flue/github's createGitHubChannel webhook server). This is the
 # repo's first SCHEDULED example; label-triggered triage is its sibling.
 #
@@ -26,8 +26,9 @@
 #   SKILLS_REPO  — Skills Project repo ("owner/repo") to fetch on its own release
 #                  cycle; omit to use the .agents/skills/ committed here.
 #
-# Prerequisite: the `agent-idea` label must exist in the repo before the first
-# run (creating an issue does not auto-create labels). See this example's README.
+# Prerequisite: an open-ended "Ideas" discussion category must exist in the repo
+# before the first run (the API creates discussions, not categories). See this
+# example's README.
 name: Scheduled Ideation
 
 on:
@@ -42,7 +43,7 @@ on:
 # tick (or a manual run) could overlap a running one — both would read the same
 # pre-file memory and file a duplicate, defeating the dedup design.
 # cancel-in-progress: false — let an in-flight run finish filing rather than kill
-# it mid-issue-creation.
+# it mid-discussion-creation.
 concurrency:
   group: ideate
   cancel-in-progress: false
@@ -50,12 +51,12 @@ concurrency:
 jobs:
   ideate:
     runs-on: ubuntu-latest
-    # The agent reads examples + docs and writes one issue; give it room.
+    # The agent reads examples + Flue source and opens one discussion; give it room.
     timeout-minutes: 30
     permissions:
       id-token: write # mint the OIDC token used to assume the AWS Bedrock role
       contents: read # read the checkout (example matrix, node_modules/@flue/*)
-      issues: write # list and create `agent-idea` issues
+      discussions: write # list and create idea Discussions in the "Ideas" category
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6

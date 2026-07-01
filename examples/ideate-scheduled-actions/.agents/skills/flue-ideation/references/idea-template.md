@@ -1,8 +1,8 @@
-# Idea issue template
+# Idea discussion template
 
-Every `agent-idea` issue you file must follow this shape so a human can triage it
-fast and, if approved, relabel it `triage` for the next agent. Fill every
-section; keep it tight.
+Every idea **discussion** you open (in the "Ideas" category) must follow this
+shape so humans can evaluate it fast and, when ready, start a spec interview on
+it. Fill every section; keep it tight.
 
 **Title:** a concrete, deduplicable one-liner naming the gap.
 Good: `Add a Linear triage example (Flue ships @flue/linear; matrix has no Linear row)`
@@ -37,5 +37,5 @@ right now.
 Anything deliberately excluded, or decisions a human should make.
 ```
 
-Before filing, confirm: the idea is **in charter**, is **not** a duplicate of any
-open or closed `agent-idea` issue, and the open-idea cap is not reached.
+Before opening, confirm: the idea is **in charter**, is **not** a duplicate of
+any open or closed idea discussion, and the open-idea cap is not reached.
