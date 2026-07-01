@@ -1,0 +1,73 @@
+# Repo-root copy of examples/validate-github-actions/.github/workflows/validate.yml.
+#
+# GitHub only runs workflows from the repo root on the default branch. This repo
+# dogfoods the validator from here: when the implement agent opens a PR, this
+# reviews it against the linked approved-spec issue. `npm ci` and `flue run` are
+# invoked from the example dir (its flue project). Keep in sync with the example
+# copy.
+#
+# The validator is READ-ONLY except for one PR review, and the model gets NO
+# shell (no forwarded secrets) — it judges intent-vs-spec through typed Octokit
+# tools. It runs automatically (validation is cheap and creates no live state),
+# unlike the human-gated implement stage. Advisory: a bot review does not satisfy
+# required human approvals, so a human still merges.
+#
+# SECURITY: trigger is `pull_request` (NOT pull_request_target) and the agent
+# never checks out or runs the PR's code — API reads only. `github.head_ref` is
+# used only inside the job `if:` (a comparison, not a shell string); only the
+# repo slug and the numeric PR id reach the shell, via env: (injection-safe).
+name: Validate Spec Match
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  validate:
+    # Only the implement agent's PRs (implement/issue-<n> branches) — don't burn
+    # tokens reviewing unrelated PRs. The skill re-checks the PR links a spec.
+    if: startsWith(github.head_ref, 'implement/issue-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: validate-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    permissions:
+      id-token: write # mint the OIDC token to assume the Bedrock role
+      pull-requests: write # submit the verdict review
+      contents: read # checkout only; no write needed
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts
+        working-directory: examples/validate-github-actions
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Fetch skills (optional, separate release cycle)
+        if: vars.SKILLS_REPO != ''
+        working-directory: examples/validate-github-actions
+        env:
+          SKILLS_REPO: ${{ vars.SKILLS_REPO }}
+        run: |
+          git config --global url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf "https://github.com/"
+          mkdir -p ./skills && (cd ./skills && npx -y skills add "https://github.com/${SKILLS_REPO}" -a universal -y)
+          echo "SKILLS_DIR=$GITHUB_WORKSPACE/examples/validate-github-actions/skills" >> "$GITHUB_ENV"
+
+      - name: Run validation agent
+        working-directory: examples/validate-github-actions
+        env:
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          ./node_modules/.bin/flue run flue-validate \
+            --input "$(printf '{"message":"Validate implementation PR %s#%s against its approved spec."}' "$REPO" "$PR_NUMBER")"

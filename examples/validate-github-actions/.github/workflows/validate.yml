@@ -1,0 +1,86 @@
+# Spec-match validation, one-shot on a GitHub-hosted runner. When a pull request
+# is opened or updated, this agent reads the PR diff and the linked approved-spec
+# issue and submits ONE review: APPROVE if the build matches the spec,
+# REQUEST_CHANGES (itemized) if not. The review is ADVISORY — a
+# github-actions[bot] review does not satisfy required human approvals — so a
+# human still merges. It runs automatically (no label): validation is a cheap,
+# read-only check, unlike the deliberately human-gated implement/e2e stages.
+#
+# SECURITY — read before editing:
+#   * Trigger is `pull_request` (NOT pull_request_target): the agent needs no
+#     write token beyond submitting a review, and it never checks out or runs the
+#     PR's code — it reads everything over the GitHub API. A plain `pull_request`
+#     from a fork gets a READ-ONLY token, so this workflow submitting a review
+#     only works for same-repo (branch) PRs, which is exactly the implement
+#     agent's PRs. That is the intended scope; fork PRs simply get no auto-review.
+#   * The agent has NO shell access to secrets (read-only agent, local() with no
+#     forwarded env). The token stays in the runner process for Octokit.
+#   * Only the repo slug and the numeric PR id ever reach the shell, via env: —
+#     no free-text PR fields are interpolated into a run: string (injection-safe).
+#
+# Auth: Bedrock via GitHub OIDC (no stored AWS keys); GitHub via the built-in
+# token scoped by `permissions:` below.
+#
+# Repository variables (Settings → Secrets and variables → Actions → Variables):
+#   AWS_ROLE_ARN, AWS_REGION  — the Bedrock-only role to assume + its region.
+#   SKILLS_REPO               — optional; Skills Project repo for a separate
+#                               release cycle (omit to use the committed skills).
+name: Validate Spec Match
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  validate:
+    # Only PRs that reference an approved-spec issue are worth validating. The
+    # implement agent's PRs come from implement/issue-<n> branches; scope to
+    # those so this doesn't burn tokens on unrelated PRs. (The skill still
+    # re-checks that the PR links a spec and bails as `uncertain` if not.)
+    if: startsWith(github.head_ref, 'implement/issue-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      # One validation in flight per PR; a new push supersedes the previous run.
+      group: validate-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    permissions:
+      id-token: write # mint the OIDC token to assume the Bedrock role
+      pull-requests: write # submit the verdict review
+      contents: read # read the repo (checkout); no write needed
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      # --ignore-scripts: install pinned, integrity-checked deps without running
+      # dependency lifecycle scripts (no arbitrary install-time code).
+      - run: npm ci --ignore-scripts
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Fetch skills (optional, separate release cycle)
+        if: vars.SKILLS_REPO != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SKILLS_REPO: ${{ vars.SKILLS_REPO }}
+        run: |
+          git config --global url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf "https://github.com/"
+          mkdir -p ./skills && (cd ./skills && npx -y skills add "https://github.com/${SKILLS_REPO}" -a universal -y)
+          echo "SKILLS_DIR=$GITHUB_WORKSPACE/skills" >> "$GITHUB_ENV"
+
+      - name: Run validation agent
+        # All workflow context reaches the step through env vars (never
+        # interpolated into the shell) — the safe pattern against injection. Only
+        # the repo slug and the numeric PR id are used, never free-text PR fields.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          ./node_modules/.bin/flue run flue-validate \
+            --input "$(printf '{"message":"Validate implementation PR %s#%s against its approved spec."}' "$REPO" "$PR_NUMBER")"
