@@ -104,8 +104,9 @@ Two layers, because anyone can comment on a public repo:
   `github_open_learning_issue` (propose a durable memory rule).
 - **Fast feedback (workflow-level, not a tool):** the workflow reacts on the
   triggering comment — **👀** as its first step (before checkout, so within a
-  second or two), **👍** on success, **👎** on failure. This is deterministic and
-  covers early failures the agent never reaches.
+  second or two) to signal "in progress", then on completion it **clears 👀** and
+  leaves **👍** on success or **👎** on failure. Deterministic, and covers early
+  failures the agent never reaches.
 
 ## Standing memory & self-learning (human-gated)
 
