@@ -63,6 +63,7 @@ jobs:
       id-token: write # mint the OIDC token used to assume the AWS Bedrock role
       contents: read # read the checkout (skills) + clone Flue for source
       discussions: write # read the thread, post comments, manage `speccing`
+      issues: write # open a `spec-learning` issue when a durable rule is stated
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6

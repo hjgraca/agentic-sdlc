@@ -91,14 +91,34 @@ Two layers, because anyone can comment on a public repo:
 
 ## What it reads and writes
 
-- **Reads (no token):** Flue's repo cloned into `context/flue` (blueprints,
-  `packages/` source, `apps/docs`) — `grep`/`read`, the grounding for a
-  build-ready spec.
+- **Reads (no token):** its standing memory
+  [`references/preferences.md`](.agents/skills/flue-spec/references/preferences.md)
+  (hard rules it must obey — e.g. "infra → AWS, never Cloudflare") **first**, then
+  Flue's repo cloned into `context/flue` (blueprints, `packages/` source,
+  `apps/docs`) — `grep`/`read`, the grounding for a build-ready spec.
 - **Reads/writes (typed tools, GraphQL — Discussions have no REST API):**
-  `github_list_discussion` (the thread = memory), `github_add_discussion_comment`
-  (questions/checkpoint/spec), `github_add_discussion_label` /
-  `github_remove_discussion_label` (manage `speccing`), and
-  `github_check_permission` (REST — the authorization gate).
+  `github_list_discussion` (the thread + replies = memory),
+  `github_add_discussion_comment` (questions/checkpoint/spec),
+  `github_add_reaction` (👀 fast-ack), `github_add_discussion_label` /
+  `github_remove_discussion_label` (manage `speccing`), `github_check_permission`
+  (REST — the authorization gate), and `github_open_learning_issue` (propose a
+  durable memory rule).
+
+## Standing memory & self-learning (human-gated)
+
+The agent reads [`references/preferences.md`](.agents/skills/flue-spec/references/preferences.md)
+every run and treats each rule as a **hard constraint**. It ships with neutral
+defaults + "edit for your org"; this repo's copy carries real rules (AWS-only
+infra, etc.).
+
+Memory **grows** without breaking the human-gated pipeline: when a human states a
+**durable rule** in a discussion, the agent opens a **`spec-learning`** issue (the
+rule + the complete proposed `preferences.md`). A maintainer applies
+**`approved-learning`** → [`learning-apply.yml`](.github/workflows/learning-apply.yml)
+— a **deterministic, model-free** workflow, the only one with `contents`/
+`pull-requests: write` — opens a PR editing `preferences.md`; a human merges it.
+The comment-triggered interview job stays read-only, so PR-write never lives on
+the world-writable path (prompt-injection safety).
 
 ## Promotion to an issue (separate, model-free)
 
@@ -117,10 +137,12 @@ AGENTS.md                                   # agent framing
 ├── SKILL.md                                # the async interview procedure
 └── references/
     ├── design-tree.md                      # the recurring forks for a Flue example
-    └── spec-template.md                    # the build-ready spec output shape
+    ├── spec-template.md                    # the build-ready spec output shape
+    └── preferences.md                      # standing memory — hard rules (self-learning)
 .github/workflows/
 ├── spec.yml                                # comment-triggered interview (Bedrock+OIDC, gated)
-└── promote.yml                             # approved → issue (deterministic, token-only)
+├── promote.yml                             # approved → issue (deterministic, token-only)
+└── learning-apply.yml                      # approved-learning → PR editing preferences.md
 src/
 ├── agents/flue-spec.ts                     # model + local() sandbox + tools — NO channel
 └── tools/github/
@@ -162,7 +184,8 @@ tests (no extra deps). The repo-root `ci.yml` also runs `tsc` and the Flue build
    `AWS_REGION`. See
    [docs/github-actions-bedrock-oidc.md](../../docs/github-actions-bedrock-oidc.md).
 2. **Enable Discussions** and create the labels: `speccing`, `approved`,
-   `approved-spec` (Issues → Labels; they apply to discussions too).
+   `approved-spec`, `spec-learning`, `approved-learning` (Issues → Labels; they
+   apply to discussions too).
 3. Commit the workflows. Mentioning `@flue-spec` on a discussion then starts an
    interview; applying `approved` promotes the result to an issue.
 4. *(Optional)* set `SKILLS_REPO` to load the skill from its own repo on a

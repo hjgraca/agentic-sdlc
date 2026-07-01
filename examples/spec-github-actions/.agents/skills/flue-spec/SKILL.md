@@ -54,12 +54,19 @@ in the invocation message; content `EYES`). Do this *before* the grounding and
 model work below — the full reply takes a minute, and the reaction tells the
 human you picked it up. Skip it when you're exiting quietly (nothing to ack).
 
-## Step 2 — Ground yourself in Flue's source (local, cheap)
+## Step 2 — Ground yourself: memory FIRST, then Flue's source (local, cheap)
 
-Flue's repo is cloned at `./context/flue` (blueprints + `packages/` + `apps/docs`)
-and this repo's examples are on disk. `grep`/`rg`/`read` — no network, no fetch
-tool. For the idea under discussion, pull the three sources that make a spec
-build-ready:
+**Read `references/preferences.md` first — it is your standing memory.** Every
+rule there is a **hard constraint** on the spec you produce and on the answers
+you recommend. Example: if it says "infra → AWS, never Cloudflare," then even
+when a Flue blueprint targets Cloudflare you must adapt the deploy to an AWS
+equivalent and recommend that — never propose the forbidden option. If a human's
+request conflicts with a rule, surface the conflict rather than silently breaking
+the rule.
+
+Then, for the idea under discussion, `grep`/`rg`/`read` the three sources that
+make a spec build-ready (Flue's repo is cloned at `./context/flue`; this repo's
+examples are on disk — no network, no fetch tool):
 
 - **The blueprint** — `context/flue/blueprints/<kind>--<name>.md` is Flue's own
   implementation guide for that integration (the canonical wiring).
@@ -97,9 +104,35 @@ pieces, exact `@flue/*` wiring with signatures from source, the closest example
 to copy, and a test plan. Then **remove the `speccing` label** with
 `github_remove_discussion_label` to close the interview loop.
 
-Do **not** create an issue or apply any other label. Promotion to an issue is a
-separate, human-gated step (`approved` label → `promote.yml`); implementation is
-a later human action still. You never trigger the next stage.
+Do **not** create the promotion issue or apply any other label. Promotion to an
+issue is a separate, human-gated step (`approved` label → `promote.yml`);
+implementation is a later human action still. You never trigger the next stage.
+
+## Capturing a learning (grow your memory — rare, human-gated)
+
+Your memory (`references/preferences.md`) should grow when a human states a
+**durable rule**, so you never re-litigate it. This is **rare** — hold a high bar:
+
+- **Propose a learning ONLY for a general rule that would change FUTURE specs** —
+  e.g. "always deploy on AWS, never Cloudflare", "prefer FIFO SQS for ordering".
+- **Never** for a choice about the *current* spec (that belongs in the thread),
+  for something already covered by an existing rule, or for anything a human did
+  not actually assert as a standing policy.
+
+When (and only when) that bar is met, call `github_open_learning_issue` with:
+
+- a concise **title** ("Learning: use AWS, never Cloudflare"),
+- a **body** that states the rule, quotes the human who set it (link the comment),
+  and — critically — contains the **complete proposed new `preferences.md`**
+  inside a fenced block whose opening line is exactly ` ```preferences.md ` and
+  which ends with a matching ` ``` `. (The apply workflow writes that block
+  verbatim to the file, so include the *entire* file with your addition merged
+  in, not just the diff.)
+
+Then mention in the thread that you've proposed the learning. A human reviews the
+issue, applies `approved-learning` (→ `learning-apply.yml` opens a PR), and merges.
+You **never** edit `preferences.md` yourself — memory changes are human-gated and
+version-controlled (ADR 0005).
 
 ## Style
 

@@ -20,7 +20,9 @@ import {
  *
  * Tools (this agent's whole GitHub surface):
  *   - `github_check_permission`      — authoritative write/admin gate (ADR 0004)
- *   - `github_list_discussion`       — read the thread (title, body, comments)
+ *   - `github_add_reaction`          — 👀 fast-ack the triggering comment
+ *   - `github_open_learning_issue`   — propose a durable memory rule (ADR 0005)
+ *   - `github_list_discussion`       — read the thread + replies (its memory)
  *   - `github_add_discussion_comment`— post a question / checkpoint / spec
  *   - `github_add_discussion_label`  — add `speccing` on kickoff
  *   - `github_remove_discussion_label`— drop `speccing` at convergence
@@ -171,6 +173,30 @@ export const addReaction = defineTool({
 			return `Reacted ${content} to ${input.subjectId}`;
 		} catch (err) {
 			return `GitHub add reaction failed: ${String(err)}`;
+		}
+	},
+});
+
+export const openLearningIssue = defineTool({
+	name: 'github_open_learning_issue',
+	description:
+		'Propose a DURABLE learning for the spec agent\'s memory (references/preferences.md). Use ONLY when a human states a general RULE that would change FUTURE specs (e.g. "always use AWS, never Cloudflare") — never for a choice about the current spec (that stays in the thread). Opens a `spec-learning` issue with the proposed rule and the exact preferences.md diff; a human reviews and applies `approved-learning` to auto-open the PR. Pass a concise title, the rule, and a proposed unified-diff or before/after snippet for preferences.md.',
+	input: v.object({
+		repo: v.string(),
+		title: v.string(),
+		body: v.string(),
+	}),
+	run: async ({ input }) => {
+		try {
+			const { data } = await octokit.rest.issues.create({
+				...splitRepo(input.repo),
+				title: input.title,
+				body: input.body,
+				labels: ['spec-learning'],
+			});
+			return `Learning proposed: ${input.repo}#${data.number} — ${data.html_url}`;
+		} catch (err) {
+			return `GitHub open learning issue failed: ${String(err)}`;
 		}
 	},
 });
