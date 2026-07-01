@@ -99,10 +99,13 @@ Two layers, because anyone can comment on a public repo:
 - **Reads/writes (typed tools, GraphQL — Discussions have no REST API):**
   `github_list_discussion` (the thread + replies = memory),
   `github_add_discussion_comment` (questions/checkpoint/spec),
-  `github_add_reaction` (👀 fast-ack), `github_add_discussion_label` /
-  `github_remove_discussion_label` (manage `speccing`), `github_check_permission`
-  (REST — the authorization gate), and `github_open_learning_issue` (propose a
-  durable memory rule).
+  `github_add_discussion_label` / `github_remove_discussion_label` (manage
+  `speccing`), `github_check_permission` (REST — the authorization gate), and
+  `github_open_learning_issue` (propose a durable memory rule).
+- **Fast feedback (workflow-level, not a tool):** the workflow reacts on the
+  triggering comment — **👀** as its first step (before checkout, so within a
+  second or two), **🚀** on success, **😕** on failure. This is deterministic and
+  covers early failures the agent never reaches.
 
 ## Standing memory & self-learning (human-gated)
 
