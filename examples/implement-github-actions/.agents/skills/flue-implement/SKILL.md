@@ -17,8 +17,9 @@ The invocation `message` carries the issue to implement, e.g.
 (default repo to `$GITHUB_REPOSITORY`).
 
 **Where you build:** `$TARGET_REPO_DIR` is the checkout of the repo you build
-into — `cd` there for all file/git work (create `examples/<name>/`, edit the
-root `ci.yml` and `README.md`, branch, commit, push from there). If
+into — `cd` there for all file/git work (create `examples/<name>/`, append to
+`.github/ci-examples.json`, edit the root `README.md`, branch, commit, push from
+there). If
 `$TARGET_REPO_DIR` is unset, use the current repo root. (Your own skill lives in
 this example dir, but your *output* goes into the target repo.) Flue's source is
 cloned at `$TARGET_REPO_DIR/context/flue` for reference.
@@ -82,8 +83,11 @@ of what fails and what you tried (Step 6). Never fake a passing test.
 
 A finished example is more than its folder. Also:
 
-- Add the example to the **CI matrix** in the repo-root `.github/workflows/ci.yml`
-  (one line under `matrix.example`).
+- Add the example to CI by appending its dir name to the JSON array in
+  **`.github/ci-examples.json`** (the CI matrix reads from this data file). Do
+  **not** edit `.github/workflows/ci.yml` — your `GITHUB_TOKEN` lacks the
+  `workflows` permission and the push would fail; the data file needs no such
+  permission.
 - Add a **row to the root `README.md`** examples table (Function / Work source /
   Code host / Trigger / Deploy / Status columns).
 - Keep the example's own `README.md` accurate (mermaid + shape, like siblings).
@@ -118,4 +122,5 @@ the PR; that is the gate.
 - Build and test only. **Never** run a deploy step, `apply`, or anything that
   touches infrastructure.
 - Only touch files under the new `examples/<name>/` plus the two wiring edits
-  (CI matrix, README table). Do not modify other examples or repo internals.
+  (`.github/ci-examples.json`, README table). Do not modify other examples,
+  `.github/workflows/`, or repo internals.
