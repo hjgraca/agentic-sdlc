@@ -1,0 +1,21 @@
+{
+	"name": "triage-linear-lambda",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "flue dev --target node",
+		"run:triage": "flue run linear-triage",
+		"test": "node --test --experimental-strip-types \"test/**/*.test.ts\""
+	},
+	"dependencies": {
+		"@flue/linear": "1.0.0-beta.1",
+		"@flue/runtime": "1.0.0-beta.5",
+		"@linear/sdk": "^86.0.0",
+		"hono": "^4.12.27",
+		"valibot": "^1.0.0"
+	},
+	"devDependencies": {
+		"@flue/cli": "1.0.0-beta.5",
+		"typescript": "^5.9.3"
+	}
+}
