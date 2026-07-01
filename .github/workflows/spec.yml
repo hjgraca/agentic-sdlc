@@ -71,6 +71,9 @@ jobs:
       issues: write # open a `spec-learning` issue when a durable rule is stated
     env:
       # The triggering comment's node id — used by the reaction steps below.
+      # The agent's Octokit reads GITHUB_TOKEN; gh/git steps read GH_TOKEN.
+      # Both point at the same Actions token.
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       COMMENT_ID: ${{ github.event.comment.node_id }}
     steps:
