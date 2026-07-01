@@ -26,7 +26,7 @@ jobs:
     if: github.event.label.name == 'approved'
     runs-on: ubuntu-latest
     permissions:
-      discussions: read # read the discussion + its comments
+      discussions: write # read the discussion + its comments, and post the cross-link back
       issues: write # create the seeded issue
     steps:
       # No checkout / node / model — just gh + jq, which the runner ships.
