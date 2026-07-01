@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
 	decideAction,
+	flattenThread,
 	isAuthorized,
 	mentionsAgent,
+	type RawComment,
 	splitRepo,
 	type ThreadComment,
 } from './helpers.ts';
@@ -102,6 +104,52 @@ test('mentionsAgent does not match a longer look-alike handle or plain text', ()
 	assert.equal(mentionsAgent('@flue-spec-bot go', 'flue-spec'), false);
 	assert.equal(mentionsAgent('we should spec this', 'flue-spec'), false);
 	assert.equal(mentionsAgent('no mention here', 'flue-spec'), false);
+});
+
+test('flattenThread interleaves replies right after their parent comment', () => {
+	const raw: RawComment[] = [
+		{
+			body: 'Q1?',
+			author: { login: 'flue-spec[bot]' },
+			replies: [
+				{ body: 'answer to Q1', author: { login: 'maintainer' } },
+			],
+		},
+		{ body: 'top-level follow-up', author: { login: 'maintainer' }, replies: [] },
+	];
+	const flat = flattenThread(raw, 'flue-spec[bot]');
+	assert.deepEqual(
+		flat.map((c) => [c.author, c.isAgent, c.body]),
+		[
+			['flue-spec[bot]', true, 'Q1?'],
+			['maintainer', false, 'answer to Q1'],
+			['maintainer', false, 'top-level follow-up'],
+		],
+	);
+});
+
+test('flattenThread: a reply is visible so decideAction engages (issue #37 regression)', () => {
+	// The agent asked (top-level), the human answered via a threaded REPLY.
+	// Before #37 the reply was invisible → decideAction saw the agent's own
+	// comment last → wrongly waited. Flattened, the reply is the newest human
+	// comment → engage.
+	const raw: RawComment[] = [
+		{
+			body: 'Q1?',
+			author: { login: 'flue-spec[bot]' },
+			replies: [{ body: 'webhook please', author: { login: 'maintainer' } }],
+		},
+	];
+	const flat = flattenThread(raw, 'flue-spec[bot]');
+	assert.equal(decideAction(flat), 'engage');
+});
+
+test('flattenThread handles missing replies and unknown authors', () => {
+	const raw: RawComment[] = [
+		{ body: 'hi', author: null }, // no replies field, null author
+	];
+	const flat = flattenThread(raw, 'flue-spec[bot]');
+	assert.deepEqual(flat, [{ author: '(unknown)', isAgent: false, body: 'hi' }]);
 });
 
 test('isAuthorized is true only for write and admin', () => {

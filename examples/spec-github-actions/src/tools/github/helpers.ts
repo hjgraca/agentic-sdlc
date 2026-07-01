@@ -36,6 +36,41 @@ export interface ThreadComment {
 	body: string;
 }
 
+/** A raw comment node (with its replies) as fetched from GraphQL. */
+export interface RawComment {
+	body: string;
+	author: { login: string } | null;
+	replies?: { body: string; author: { login: string } | null }[];
+}
+
+/**
+ * Flatten a discussion's top-level comments AND their threaded replies into one
+ * ordered `ThreadComment[]`. A `discussion_comment` event fires for both a
+ * top-level comment and a reply, so the agent must see both — otherwise a human
+ * who answers via the "Reply" link triggers a run whose thread read misses their
+ * message, and the reducer wrongly decides to `wait` (silent no-op).
+ *
+ * Order is conversation order: each top-level comment, immediately followed by
+ * its replies, then the next top-level comment. `isAgent` marks the viewer's own
+ * posts so the reducer can ignore them.
+ */
+export function flattenThread(
+	comments: RawComment[],
+	viewerLogin: string,
+): ThreadComment[] {
+	const out: ThreadComment[] = [];
+	const toEntry = (body: string, author: { login: string } | null): ThreadComment => ({
+		author: author?.login ?? '(unknown)',
+		isAgent: (author?.login ?? '') === viewerLogin,
+		body,
+	});
+	for (const c of comments) {
+		out.push(toEntry(c.body, c.author));
+		for (const r of c.replies ?? []) out.push(toEntry(r.body, r.author));
+	}
+	return out;
+}
+
 /**
  * Decide, on a cold wake, what the agent should do this run by looking only at
  * the thread. This is the load-bearing reducer (ADR 0004): each `flue run` is a

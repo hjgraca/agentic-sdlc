@@ -2,6 +2,7 @@ import { defineTool } from '@flue/runtime';
 import { Octokit } from '@octokit/rest';
 import * as v from 'valibot';
 import {
+	flattenThread,
 	isAuthorized,
 	type RepoPermission,
 	splitRepo,
@@ -48,7 +49,13 @@ const DISCUSSION_THREAD = `
 				author { login }
 				labels(first: 20) { nodes { id name } }
 				comments(first: 100) {
-					nodes { body author { login } }
+					nodes {
+						body
+						author { login }
+						# Threaded replies fire the same discussion_comment event, so we
+						# must read them too (see flattenThread / issue #37).
+						replies(first: 100) { nodes { body author { login } } }
+					}
 					pageInfo { hasNextPage endCursor }
 				}
 			}
@@ -63,7 +70,11 @@ const DISCUSSION_COMMENTS_PAGE = `
 		repository(owner: $owner, name: $repo) {
 			discussion(number: $number) {
 				comments(first: 100, after: $after) {
-					nodes { body author { login } }
+					nodes {
+						body
+						author { login }
+						replies(first: 100) { nodes { body author { login } } }
+					}
 					pageInfo { hasNextPage endCursor }
 				}
 			}
@@ -167,11 +178,18 @@ export const addReaction = defineTool({
 export const listDiscussion = defineTool({
 	name: 'github_list_discussion',
 	description:
-		'Read a discussion thread — its title, body, labels, and ALL comments in order. This is your memory each run: you wake cold, so re-read the whole thread to see what has been decided and what the latest human asked. Returns { id, number, title, body, author, labels: [...], comments: [{ author, isAgent, body }] } where isAgent marks your own past comments (ignore those when deciding what to do next).',
+		'Read a discussion thread — its title, body, labels, and ALL comments AND threaded replies in conversation order. This is your memory each run: you wake cold, so re-read the whole thread to see what has been decided and what the latest human asked. Replies are included (a human may answer via the Reply link, not just a top-level comment). Returns { id, number, title, body, author, labels: [...], comments: [{ author, isAgent, body }] } where isAgent marks your own past comments (ignore those when deciding what to do next).',
 	input: v.object({ repo: v.string(), number: v.number() }),
 	run: async ({ input }) => {
 		try {
 			const { owner, repo } = splitRepo(input.repo);
+			// A comment node carries its threaded replies (issue #37): both a
+			// top-level comment and a reply fire the trigger, so we must read both.
+			type CommentNode = {
+				body: string;
+				author: { login: string } | null;
+				replies: { nodes: { body: string; author: { login: string } | null }[] };
+			};
 			const data: {
 				repository: {
 					discussion: {
@@ -181,7 +199,7 @@ export const listDiscussion = defineTool({
 						author: { login: string } | null;
 						labels: { nodes: { id: string; name: string }[] };
 						comments: {
-							nodes: { body: string; author: { login: string } | null }[];
+							nodes: CommentNode[];
 							pageInfo: { hasNextPage: boolean; endCursor: string | null };
 						};
 					};
@@ -202,7 +220,7 @@ export const listDiscussion = defineTool({
 					repository: {
 						discussion: {
 							comments: {
-								nodes: { body: string; author: { login: string } | null }[];
+								nodes: CommentNode[];
 								pageInfo: { hasNextPage: boolean; endCursor: string | null };
 							};
 						};
@@ -217,11 +235,11 @@ export const listDiscussion = defineTool({
 				page = next.repository.discussion.comments.pageInfo;
 			}
 
-			const comments: ThreadComment[] = raw.map((c) => ({
-				author: c.author?.login ?? '(unknown)',
-				isAgent: (c.author?.login ?? '') === me,
-				body: c.body,
-			}));
+			// Flatten top-level comments and their replies into one ordered thread.
+			const comments: ThreadComment[] = flattenThread(
+				raw.map((c) => ({ body: c.body, author: c.author, replies: c.replies.nodes })),
+				me,
+			);
 
 			return JSON.stringify({
 				id: d.id,
