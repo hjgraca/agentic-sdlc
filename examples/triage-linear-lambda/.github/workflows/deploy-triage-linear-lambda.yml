@@ -1,0 +1,82 @@
+name: Deploy triage-linear-lambda
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'examples/triage-linear-lambda/**'
+      - '.github/workflows/deploy-triage-linear-lambda.yml'
+  workflow_dispatch:
+
+permissions:
+  id-token: write  # OIDC token for aws-actions/configure-aws-credentials
+  contents: read
+
+env:
+  AWS_REGION: us-west-2
+  ECR_REPOSITORY: triage-linear
+  LAMBDA_FUNCTION_NAME: triage-linear
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: examples/triage-linear-lambda
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: examples/triage-linear-lambda/package-lock.json
+
+      # Install deps without running install-time scripts.
+      - run: npm ci --ignore-scripts
+
+      # Type-check and build the Flue node target.
+      - run: ./node_modules/.bin/tsc --noEmit
+      - run: ./node_modules/.bin/flue build --target node
+
+      # Authenticate to AWS via OIDC (no long-lived keys).
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Log in to ECR.
+      - name: Log in to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # Build and push the container image.
+      - name: Build and push image
+        id: build-image
+        env:
+          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          IMAGE_URI="${REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+          docker build -t "${IMAGE_URI}" .
+          docker push "${IMAGE_URI}"
+          echo "image_uri=${IMAGE_URI}" >> "$GITHUB_OUTPUT"
+
+      # Update the Lambda function to use the new image.
+      - name: Update Lambda function code
+        env:
+          IMAGE_URI: ${{ steps.build-image.outputs.image_uri }}
+        run: |
+          aws lambda update-function-code \
+            --function-name "${LAMBDA_FUNCTION_NAME}" \
+            --image-uri "${IMAGE_URI}" \
+            --region "${AWS_REGION}"
+
+      # Wait for the update to finish before returning.
+      - name: Wait for Lambda update
+        run: |
+          aws lambda wait function-updated \
+            --function-name "${LAMBDA_FUNCTION_NAME}" \
+            --region "${AWS_REGION}"
