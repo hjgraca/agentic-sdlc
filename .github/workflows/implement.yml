@@ -1,0 +1,90 @@
+# Repo-root copy of examples/implement-github-actions/.github/workflows/implement.yml.
+#
+# GitHub only runs workflows from the repo root on the default branch. This repo
+# dogfoods the implement agent from here. Unlike the other dogfood copies, the
+# agent BUILDS INTO this repo (creates examples/<name>/, edits root ci.yml +
+# README), so TARGET_REPO_DIR is the workspace root and git/PR work happens there.
+# `flue run` is invoked from the example dir (its flue project); the agent's
+# output goes to TARGET_REPO_DIR. Keep in sync with the example copy.
+#
+# This agent is a CODING agent (ADR 0006): real sandbox (local() on THIS runner),
+# edit→build→test loop, opens a PR a human merges. Builds + tests only — NEVER
+# deploys. The `implement` label is maintainer-gated, so this job may hold
+# contents/pull-requests write; deps install --ignore-scripts + pinned; the PR is
+# the human review gate.
+name: Implement Spec
+
+on:
+  issues:
+    types: [labeled]
+
+jobs:
+  implement:
+    if: github.event.label.name == 'implement'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: implement-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    timeout-minutes: 45
+    permissions:
+      id-token: write # mint the OIDC token used to assume the AWS Bedrock role
+      contents: write # create the implement/issue-<n> branch, commit, push
+      pull-requests: write # open the PR
+      issues: write # post the run-summary comment on the triggering issue
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # The agent builds INTO this checkout (workspace root), not the example dir.
+      TARGET_REPO_DIR: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      # Install the agent runtime app's deps (in the example dir). The example it
+      # BUILDS gets its own --ignore-scripts install inside the agent's loop.
+      - run: npm ci --ignore-scripts
+        working-directory: examples/implement-github-actions
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      # Clone Flue into the TARGET repo root so the agent finds it at
+      # $TARGET_REPO_DIR/context/flue.
+      - name: Clone Flue (live source for grounding)
+        run: |
+          rm -rf context/flue
+          git clone --depth 1 --filter=blob:none \
+            https://github.com/withastro/flue.git context/flue
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch skills (optional, separate release cycle)
+        if: vars.SKILLS_REPO != ''
+        working-directory: examples/implement-github-actions
+        env:
+          SKILLS_REPO: ${{ vars.SKILLS_REPO }}
+        run: |
+          git config --global url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf "https://github.com/"
+          mkdir -p ./skills && (cd ./skills && npx -y skills add "https://github.com/${SKILLS_REPO}" -a universal -y)
+          echo "SKILLS_DIR=$GITHUB_WORKSPACE/examples/implement-github-actions/skills" >> "$GITHUB_ENV"
+
+      - name: Run implement agent
+        working-directory: examples/implement-github-actions
+        env:
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          ./node_modules/.bin/flue run flue-implement \
+            --input "$(printf '{"message":"Implement approved spec %s#%s."}' "$REPO" "$ISSUE_NUMBER")"
+
+# NOTE: this agent forwards the GitHub token into the sandbox (its shell runs
+# git + gh) and TARGET_REPO_DIR points at the workspace root it builds into.

@@ -20,6 +20,7 @@ jobs:
           - spec-github-actions
           - github-pr-label-actions
           - ideate-scheduled-actions
+          - implement-github-actions
     defaults:
       run:
         working-directory: examples/${{ matrix.example }}
