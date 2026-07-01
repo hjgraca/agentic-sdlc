@@ -22,6 +22,14 @@ fine too.
   adapt the deploy to an AWS equivalent (Lambda, ECS/Fargate, API Gateway, SQS,
   DynamoDB, S3) and say so in the spec.
 
+## Sandboxes
+
+- **Use only Flue-supported sandboxes; do NOT use the Cloudflare sandbox**
+  (Durable Objects / `@cloudflare/sandbox`). **Default to Daytona.** Deviate from
+  Daytona only when the agent's workload has a specific reason — e.g. a pure
+  read-and-reply triage agent that runs no code can use `local()` — and document
+  that reason explicitly in the spec.
+
 ## Models
 
 - Default to `amazon-bedrock/us.anthropic.claude-sonnet-4-6` (this repo's
