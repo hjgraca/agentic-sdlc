@@ -27,6 +27,11 @@ fine too.
 - Default to `amazon-bedrock/us.anthropic.claude-sonnet-4-6` (this repo's
   Bedrock/OIDC convention) unless a spec has a specific reason to differ.
 
+## Concurrency & Ordering
+
+- For any single-writer-per-key ordering requirement, use **AWS FIFO SQS** (with
+  a **DynamoDB lease**) rather than hand-rolled locking mechanisms.
+
 ## Conventions
 
 - _(example)_ Prefer the deploy shape of the closest existing example over
