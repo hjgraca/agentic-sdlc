@@ -1,0 +1,84 @@
+# Repo-root copy of examples/spec-github-actions/.github/workflows/learning-apply.yml.
+# GitHub runs workflows only from the repo root on the default branch. This copy
+# targets the example's preferences.md by full path from the repo root (git runs
+# at the root, so no working-directory needed). Keep in sync with the example.
+#
+# Apply an APPROVED learning to the spec agent's memory. When a maintainer adds
+# the `approved-learning` label to a `spec-learning` issue, this opens a PR that
+# updates references/preferences.md with the proposed new content, and links the
+# issue. A human reviews and MERGES the PR — that is the second human gate.
+#
+# DELIBERATELY model-free and label-gated — NOT comment-triggered. This is the
+# only spec-side job with contents+pull-requests write, kept OFF the
+# world-writable comment path (prompt-injection safety, ADR 0005).
+#
+# Contract: the spec agent's `spec-learning` issue body must contain the COMPLETE
+# proposed preferences.md inside a fenced block whose opening line reads exactly
+# ```preferences.md and which ends with a matching ``` . This workflow extracts
+# that block verbatim and writes it to the file — no model, no guessing.
+#
+# Prerequisite: labels `spec-learning` and `approved-learning` exist.
+name: Apply Approved Learning
+
+on:
+  issues:
+    types: [labeled]
+
+jobs:
+  apply:
+    if: >-
+      github.event.label.name == 'approved-learning' &&
+      contains(join(github.event.issue.labels.*.name, ','), 'spec-learning')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # commit the preferences.md change on a branch
+      pull-requests: write # open the PR
+      issues: write # comment the PR link back on the issue
+    env:
+      PREF: examples/spec-github-actions/.agents/skills/flue-spec/references/preferences.md
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Extract proposed preferences.md and open a PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        # Issue body reaches the script via a file (gh --jq), never interpolated
+        # into the shell — it is untrusted free text.
+        run: |
+          set -euo pipefail
+
+          gh issue view "$ISSUE_NUMBER" --json body --jq .body > /tmp/issue_body.md
+
+          # Extract the block between ```preferences.md and the next ``` .
+          awk '
+            /^```preferences\.md[[:space:]]*$/ { grab=1; next }
+            grab && /^```[[:space:]]*$/ { grab=0; next }
+            grab { print }
+          ' /tmp/issue_body.md > /tmp/new_pref.md
+
+          if [ ! -s /tmp/new_pref.md ]; then
+            gh issue comment "$ISSUE_NUMBER" --body "⚠️ Could not apply: no \`\`\`preferences.md fenced block found in the issue body. Add the complete proposed preferences.md in such a block, then re-apply \`approved-learning\`."
+            exit 1
+          fi
+
+          cp /tmp/new_pref.md "$PREF"
+
+          if git diff --quiet -- "$PREF"; then
+            gh issue comment "$ISSUE_NUMBER" --body "No change to preferences.md (proposed content matches the current file). Nothing to apply."
+            exit 0
+          fi
+
+          branch="learning/issue-${ISSUE_NUMBER}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add "$PREF"
+          git commit -m "spec: apply learning from #${ISSUE_NUMBER}"
+          git push -u origin "$branch"
+
+          gh pr create \
+            --base main --head "$branch" \
+            --title "spec: apply learning — $ISSUE_TITLE" \
+            --body "$(printf 'Applies the approved learning from #%s to the spec agent memory (references/preferences.md).\n\nReview and merge to update the memory. Closes #%s.' "$ISSUE_NUMBER" "$ISSUE_NUMBER")"
