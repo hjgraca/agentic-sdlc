@@ -25,7 +25,7 @@ import {
  *   - `github_add_discussion_comment`— post a question / checkpoint / spec
  *   - `github_add_discussion_label`  — add `speccing` on kickoff
  *   - `github_remove_discussion_label`— drop `speccing` at convergence
- * (Acknowledgment 👀/🚀/😕 reactions are workflow-level in spec.yml, not a tool —
+ * (Acknowledgment 👀/👍/👎 reactions are workflow-level in spec.yml, not a tool —
  *  they must fire before/after the agent runs, including on early failure.)
  *
  * Auth from the environment at runtime — never hardcode tokens:
