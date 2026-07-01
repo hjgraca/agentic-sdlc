@@ -1,0 +1,123 @@
+# Repo-root copy of examples/spec-github-actions/.github/workflows/spec.yml.
+#
+# GitHub only runs workflows from `.github/workflows/` at the repo root on the
+# default branch — a workflow nested under examples/ never fires. So this repo
+# dogfoods the spec agent by running it from here, with every `run:` step
+# executing inside the example dir via `defaults.run.working-directory`. The
+# example keeps its own copy so it still works when cloned standalone; this root
+# copy is what actually runs spec interviews in THIS repo. Keep the two in sync.
+#
+# Async spec interview on a GitHub-hosted runner. A permission-holding human
+# @-mentions the agent (@flue-spec) on a Discussion, or comments while the
+# discussion is labelled `speccing`; each such comment runs `flue run` once and
+# the job exits. The workflow IS the trigger — there is no Flue channel here
+# (contrast @flue/github's createGitHubChannel webhook server). Each wake is
+# cold; the agent re-reads the whole thread (its only memory). See ADR 0004.
+#
+# AUTHORIZATION is two-layer (the comment trigger is world-writable):
+#   1. cheap `if:` filter below on author_association (OWNER/MEMBER/COLLABORATOR)
+#      — stops drive-by comments from ever starting a runner.
+#   2. authoritative github_check_permission tool inside the agent (write/admin)
+#      — the real gate, before any model work.
+#
+# Bedrock auth uses GitHub OIDC — NO long-lived AWS keys. The job mints a
+# short-lived OIDC token (`id-token: write`) and assumes a Bedrock-only IAM role.
+#
+# Repository variables (Settings → Secrets and variables → Actions → Variables):
+#   AWS_ROLE_ARN — role to assume, scoped to bedrock:InvokeModel on the `us.`
+#                  inference profile only (see repo AGENTS.md Bedrock gotcha).
+#   AWS_REGION   — the Bedrock region, e.g. us-west-2.
+#   SKILLS_REPO  — (optional) Skills Project repo to fetch on its own release cycle.
+#
+# Prerequisite: a `speccing` label must exist in the repo (created once in
+# settings). The agent adds it on kickoff and removes it at convergence.
+name: Spec Interview
+
+on:
+  discussion_comment:
+    types: [created]
+
+# Cheap first-cut auth + skip the agent's own comments. author_association is a
+# relationship, not a permission (a past CONTRIBUTOR has no write access), so it
+# is only a filter — the agent still does the authoritative permission check.
+# The bot's own comments are ignored so we never react to ourselves.
+jobs:
+  spec:
+    if: >-
+      github.event.sender.type != 'Bot' &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+    runs-on: ubuntu-latest
+    # Serialize per discussion so a cold wake sees the prior run's post and does
+    # not re-ask or double-spec. Different discussions still run in parallel.
+    concurrency:
+      group: spec-${{ github.event.discussion.number }}
+      cancel-in-progress: false
+    # Agents can run a while (model + several API round-trips); give them room.
+    timeout-minutes: 30
+    # Every `run:` step executes inside the example app (its package.json,
+    # flue.config.ts, .agents/skills/). Action steps run at the repo root.
+    defaults:
+      run:
+        working-directory: examples/spec-github-actions
+    permissions:
+      id-token: write # mint the OIDC token used to assume the AWS Bedrock role
+      contents: read # read the checkout (skills) + clone Flue for source
+      discussions: write # read the thread, post comments, manage `speccing`
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      # --ignore-scripts: install pinned deps without running lifecycle scripts.
+      - run: npm ci --ignore-scripts
+
+      # Assume the Bedrock-only IAM role via GitHub OIDC (exports short-lived
+      # AWS_* env vars the Bedrock SDK picks up automatically — no stored keys).
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      # Clone Flue's public repo so the agent grounds the spec in LIVE source —
+      # blueprints, docs, and @flue/* package signatures — as local files (no
+      # fetch tool). Shallow + blobless keeps it ~20MB / a few seconds.
+      - name: Clone Flue (live source for grounding)
+        run: |
+          rm -rf context/flue
+          git clone --depth 1 --filter=blob:none \
+            https://github.com/withastro/flue.git context/flue
+
+      # Optional: fetch the Skills Project from its OWN repo (separate release
+      # cycle). Set the SKILLS_REPO repo variable to enable; omit to use the
+      # committed .agents/skills/.
+      - name: Fetch skills (optional, separate release cycle)
+        if: vars.SKILLS_REPO != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SKILLS_REPO: ${{ vars.SKILLS_REPO }}
+        run: |
+          git config --global url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf "https://github.com/"
+          mkdir -p ./skills && (cd ./skills && npx -y skills add "https://github.com/${SKILLS_REPO}" -a universal -y)
+          echo "SKILLS_DIR=$GITHUB_WORKSPACE/examples/spec-github-actions/skills" >> "$GITHUB_ENV"
+
+      - name: Run spec agent
+        # All workflow context reaches the step through env vars, never
+        # interpolated into the shell — the triggering comment author is
+        # untrusted free text, so this is mandatory (injection-safe).
+        env:
+          # OIDC step already exported the short-lived AWS_* creds for Bedrock.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          DISCUSSION_NUMBER: ${{ github.event.discussion.number }}
+          TRIGGERED_BY: ${{ github.event.comment.user.login }}
+        # `flue run` input is an object with a string "message"; the skill parses
+        # the discussion ref + triggering login out of it. Built in-shell from
+        # env vars so no untrusted context is interpolated into YAML.
+        run: |
+          ./node_modules/.bin/flue run flue-spec \
+            --input "$(printf '{"message":"Spec discussion %s#%s; triggered by @%s."}' "$REPO" "$DISCUSSION_NUMBER" "$TRIGGERED_BY")"
+
+# NOTE: we do NOT forward secrets into the sandbox via `local({ env })`. The
+# agent's tools are typed defineTool functions reading process.env in the host
+# Node process — the model never gets a shell or the token.

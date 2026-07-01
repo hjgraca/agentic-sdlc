@@ -17,8 +17,8 @@ this proposal, a spec interview, human iteration — lives in that one discussio
 thread. This example only *opens* the discussion; the spec agent and humans take
 it from there.
 
-It is the scheduled counterpart to
-[`triage-github-actions`](../triage-github-actions/): same one-shot
+It is the scheduled counterpart to the other GitHub Actions examples (e.g.
+[`spec-github-actions`](../spec-github-actions/)): same one-shot
 Actions/`flue run`/OIDC→Bedrock shape, but the **trigger is a clock**, not a
 label.
 

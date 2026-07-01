@@ -1,9 +1,9 @@
 {
-	"name": "triage-github-actions",
+	"name": "spec-github-actions",
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"run:triage": "flue run github-triage",
+		"run:spec": "flue run flue-spec",
 		"test": "node --test --experimental-strip-types \"src/**/*.test.ts\""
 	},
 	"dependencies": {

@@ -23,9 +23,10 @@ it encodes conventions and hard-won lessons that are easy to get wrong.
   come from it.
 - The closest existing example under `examples/` — copy its shape rather than
   inventing one. Current examples: `triage-jira-k8s` (webhook→server),
-  `triage-jira-gitlab-runner` (CI one-shot), `triage-github-actions` (Actions
-  one-shot), `github-pr-label-actions` (Actions, label-triggered, takes write
-  actions).
+  `triage-jira-gitlab-runner` (CI one-shot), `github-pr-label-actions` (Actions,
+  label-triggered, takes write actions), `ideate-scheduled-actions` (Actions,
+  scheduled cron), `spec-github-actions` (Actions, discussion-comment-triggered,
+  async interview).
 
 ## 1. CHECK THE FLUE ECOSYSTEM BEFORE WRITING ANYTHING
 
@@ -50,10 +51,10 @@ Trigger and deploy are NOT independent knobs (AGENTS.md "Trigger drives deploy")
 
 - **Webhook** → long-running server + a Flue **channel** (`src/channels/…`) →
   k8s / VM. Real-time. (`triage-jira-k8s`.)
-- **CI / platform event** (issue labelled, PR opened, pipeline trigger) →
-  **one-shot `flue run`, NO channel** → a runner (GitHub Actions, GitLab CI).
-  The workflow IS the trigger; input arrives as a CLI `--input`.
-  (`triage-github-actions`, `github-pr-label-actions`.)
+- **CI / platform event** (issue labelled, PR opened, discussion comment,
+  schedule) → **one-shot `flue run`, NO channel** → a runner (GitHub Actions,
+  GitLab CI). The workflow IS the trigger; input arrives as a CLI `--input`.
+  (`github-pr-label-actions`, `spec-github-actions`, `ideate-scheduled-actions`.)
 
 "Same agent on a different deploy" is a NEW example, not a config switch.
 

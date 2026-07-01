@@ -1,8 +1,10 @@
 # Wiring GitHub Actions → AWS Bedrock with OIDC (no stored keys)
 
-The [`triage-github-actions`](../examples/triage-github-actions/) example (and
-this repo's own root [`.github/workflows/triage.yml`](../.github/workflows/triage.yml))
-authenticates to Bedrock with **GitHub OIDC** — the Actions job mints a
+The GitHub Actions examples (e.g.
+[`spec-github-actions`](../examples/spec-github-actions/) and
+[`ideate-scheduled-actions`](../examples/ideate-scheduled-actions/), plus this
+repo's own root [`.github/workflows/`](../.github/workflows/) dogfood copies)
+authenticate to Bedrock with **GitHub OIDC** — the Actions job mints a
 short-lived token and assumes an IAM role at runtime. There are **no long-lived
 AWS keys** anywhere: nothing in repo secrets, nothing on the runner.
 
