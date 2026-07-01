@@ -20,12 +20,13 @@ import {
  *
  * Tools (this agent's whole GitHub surface):
  *   - `github_check_permission`      — authoritative write/admin gate (ADR 0004)
- *   - `github_add_reaction`          — 👀 fast-ack the triggering comment
  *   - `github_open_learning_issue`   — propose a durable memory rule (ADR 0005)
  *   - `github_list_discussion`       — read the thread + replies (its memory)
  *   - `github_add_discussion_comment`— post a question / checkpoint / spec
  *   - `github_add_discussion_label`  — add `speccing` on kickoff
  *   - `github_remove_discussion_label`— drop `speccing` at convergence
+ * (Acknowledgment 👀/🚀/😕 reactions are workflow-level in spec.yml, not a tool —
+ *  they must fire before/after the agent runs, including on early failure.)
  *
  * Auth from the environment at runtime — never hardcode tokens:
  *   GITHUB_TOKEN    Actions-provided (needs discussions: write), or a PAT locally
@@ -117,14 +118,6 @@ const LABEL_ID = `
 	}
 `;
 
-const ADD_REACTION = `
-	mutation ($subjectId: ID!, $content: ReactionContent!) {
-		addReaction(input: { subjectId: $subjectId, content: $content }) {
-			reaction { content }
-		}
-	}
-`;
-
 export const checkPermission = defineTool({
 	name: 'github_check_permission',
 	description:
@@ -151,28 +144,6 @@ export const checkPermission = defineTool({
 				authorized: false,
 				note: `permission lookup failed (treated as unauthorized): ${String(err)}`,
 			});
-		}
-	},
-});
-
-export const addReaction = defineTool({
-	name: 'github_add_reaction',
-	description:
-		'React to a discussion comment as a fast acknowledgment — use 👀 (EYES) on the triggering comment right after you decide to engage, so the human sees you picked it up before the full reply (which takes a minute). Pass the comment NODE id (from the invocation message) and a content of EYES (default), THUMBS_UP, ROCKET, etc.',
-	input: v.object({
-		subjectId: v.string(),
-		content: v.optional(v.string()),
-	}),
-	run: async ({ input }) => {
-		try {
-			const content = input.content ?? 'EYES';
-			await octokit.graphql(ADD_REACTION, {
-				subjectId: input.subjectId,
-				content,
-			});
-			return `Reacted ${content} to ${input.subjectId}`;
-		} catch (err) {
-			return `GitHub add reaction failed: ${String(err)}`;
 		}
 	},
 });
