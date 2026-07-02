@@ -8,15 +8,15 @@
 # standalone (the clone-one-folder convention); this root copy is what actually
 # ideates over THIS repo. Keep the two in sync.
 #
-# Once an hour the agent surveys this repo's examples against Flue's
+# Every 3 hours the agent surveys this repo's examples against Flue's
 # capabilities and opens at most one `agent-idea` Discussion ("Ideas"
 # category). The workflow IS the
 # trigger — there is no Flue channel here (contrast @flue/github's
 # createGitHubChannel webhook server). This is the repo's first SCHEDULED
 # example; label-triggered triage.yml is its sibling.
 #
-# Cadence is the cost/noise dial: `0 * * * *` is hourly; widen to `0 */4 * * *`
-# etc. to run less often. NOTE: GitHub disables scheduled workflows after 60 days
+# Cadence is the cost/noise dial: `0 */3 * * *` is every 3 hours; `0 * * * *` is
+# hourly, `0 */6 * * *` every 6h, etc. NOTE: GitHub disables scheduled workflows after 60 days
 # of repo inactivity (a feature here — a dead repo stops nagging itself) and cron
 # is best-effort (a tick can be delayed under load). The concurrency group below
 # makes the agent a singleton so a delayed tick never races a running one.
@@ -43,8 +43,8 @@ name: Scheduled Ideation
 
 on:
   schedule:
-    # Hourly, on the hour. Cadence is the cost/noise dial — see the header note.
-    - cron: '0 * * * *'
+    # Every 3 hours, on the hour. Cadence is the cost/noise dial — see the header note.
+    - cron: '0 */3 * * *'
   # Manual runs for testing/dogfooding; the concurrency group keeps a manual run
   # from colliding with a scheduled tick.
   workflow_dispatch:
