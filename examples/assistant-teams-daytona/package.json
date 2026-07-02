@@ -1,0 +1,22 @@
+{
+	"name": "assistant-teams-daytona",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "flue dev --target node",
+		"run:assistant": "flue run assistant",
+		"test": "node --test src/lib/helpers.test.ts"
+	},
+	"dependencies": {
+		"@daytona/sdk": "^0.191.0",
+		"@flue/runtime": "1.0.0-beta.5",
+		"@flue/teams": "1.0.0-beta.1",
+		"botframework-schema": "4.23.3",
+		"hono": "^4.12.27",
+		"valibot": "^1.4.1"
+	},
+	"devDependencies": {
+		"@flue/cli": "1.0.0-beta.5",
+		"typescript": "^5.9.3"
+	}
+}
