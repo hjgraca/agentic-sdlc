@@ -40,6 +40,20 @@ fine too.
 - For any single-writer-per-key ordering requirement, use **AWS FIFO SQS** (with
   a **DynamoDB lease**) rather than hand-rolled locking mechanisms.
 
+## Documentation
+
+- **The spec must include a deployment/testing section that is a followable
+  runbook, not prose.** Specify it as tiers: **Tier 1 — offline** (no external
+  accounts) with the exact build/typecheck/test commands plus how to boot the app
+  and assert its ingress/auth behaves (e.g. an unauthenticated request returns
+  401 — the rejection *is* the passing check); **Tier 2 — real end-to-end** with
+  the concrete provider/deploy steps (registration → the specific secrets it
+  yields → wiring → how to trigger the first real event). Include an **honest
+  ceiling statement**: what genuinely cannot be verified without live infra, so a
+  reader never chases an impossible local shortcut. Do not describe a multi-step
+  external setup (e.g. "register a bot in the cloud console") as if it were a
+  single step.
+
 ## Conventions
 
 - _(example)_ Prefer the deploy shape of the closest existing example over
