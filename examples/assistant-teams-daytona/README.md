@@ -91,56 +91,103 @@ flowchart LR
    `post_teams_message` — bound to that conversation, so the model never handles
    serviceUrls or conversation ids.
 
-## Setup
+## How to test this — read this first
+
+There is **no local emulator shortcut** for this example, and it's worth
+understanding why before you sink time into one. The Teams channel
+(`@flue/teams`) rejects anything that isn't genuine, Microsoft-signed Teams
+traffic, in this order (see `context/flue/packages/teams/src/routes.ts`):
+
+1. It **requires a Bot Framework JWT** (`Authorization: Bearer …`) signed by
+   Microsoft's keys, with your App ID as the audience. No token → `401`.
+2. It requires `channelId: "msteams"` → anything else (e.g. the Bot Framework
+   Emulator sends `"emulator"`) → `403`.
+3. It requires the token to carry the `msteams` endorsement → `401` otherwise.
+
+So the **Bot Framework Emulator, `curl`, and Postman cannot reach the agent** —
+they're rejected at ingress by design (this is the enterprise-auth posture the
+example exists to demonstrate). Testing therefore comes in two honest tiers:
+
+| Tier | What it proves | What you need |
+|---|---|---|
+| **1 — offline checks** | code compiles, agent registers, ingress rejects non-Teams traffic, pure logic is correct | nothing (no accounts) |
+| **2 — real Teams end-to-end** | the whole loop: Teams → JWT verify → sandbox → reply | Azure Bot + M365/Teams tenant + Daytona + Bedrock |
+
+### Tier 1 — offline checks (no accounts)
 
 ```bash
 npm install
-cp .env.example .env   # fill in real secrets
+npm test                              # node:test — pure helpers (stripAtMention), no network
+./node_modules/.bin/tsc --noEmit      # typecheck
+./node_modules/.bin/flue build --target node   # agent + channel register
+
+# Boot the server and confirm the ingress is wired and correctly locked down.
+# (Dummy Teams values are fine — they only need to be present for config to load.)
+TEAMS_APP_ID=00000000-0000-0000-0000-000000000000 \
+TEAMS_TENANT_ID=00000000-0000-0000-0000-000000000000 \
+TEAMS_APP_PASSWORD=dummy DAYTONA_API_KEY=dummy DAYTONA_SNAPSHOT=none \
+AWS_REGION=us-west-2 \
+./node_modules/.bin/flue dev --target node      # → http://localhost:3583, channel: teams
+
+# In another shell — an unauthenticated POST MUST be rejected (this is the pass):
+curl -s -o /dev/null -w '%{http_code}\n' -X POST \
+  http://localhost:3583/channels/teams/activities \
+  -H 'Content-Type: application/json' -d '{"type":"message","text":"hi"}'
+# Expect: 401  ← proves JWT verification is active. A 200 here would be a bug.
 ```
 
-You need:
+This is the ceiling of what you can verify without Microsoft's infrastructure. To
+actually see the bot *reply*, you need Tier 2.
 
-- A **Teams Bot** registered in Azure Portal (Bot Framework registration). Provides
-  `TEAMS_APP_ID`, `TEAMS_APP_PASSWORD`, `TEAMS_TENANT_ID`.
-- A **Daytona** account + API key → `DAYTONA_API_KEY`.
-- A **skills snapshot** registered with Daytona → `DAYTONA_SNAPSHOT` (build
-  `Dockerfile.sandbox`, push to a registry Daytona can pull, register as a
-  snapshot).
+### Tier 2 — real Teams, end to end
 
-## Build the skills snapshot
+Roughly an hour, and you need: an **Azure** subscription, an **M365 tenant with
+Teams** where you can sideload a custom app (or an admin who can), a **Daytona**
+account, and **AWS Bedrock** access. Steps:
 
-```bash
-docker build -f Dockerfile.sandbox -t <REGISTRY>/teams-assistant-skills:v1 .
-docker push <REGISTRY>/teams-assistant-skills:v1
-# Register it as a Daytona snapshot, then set
-# DAYTONA_SNAPSHOT=teams-assistant-skills:v1 in your env.
-```
+1. **Register the bot in Azure.** Azure Portal → create an **Azure Bot** resource
+   (or an App Registration + Bot Channels Registration). This yields:
+   - **App ID** → `TEAMS_APP_ID`
+   - a **client secret** you generate → `TEAMS_APP_PASSWORD`
+   - your **Directory (tenant) ID** → `TEAMS_TENANT_ID`
+     (`TEAMS_APP_ID`/`TEAMS_TENANT_ID` drive inbound JWT verification;
+     `TEAMS_APP_PASSWORD` is used only for the *outbound* OAuth token in
+     `teams-client.ts`.)
+2. **Enable the Microsoft Teams channel** on the Azure Bot resource.
+3. **Build + register the Daytona skills snapshot** (the agent discovers
+   `AGENTS.md` + `.agents/skills/` from the sandbox filesystem, so they must be
+   baked into the box — see "The key idea" above):
+   ```bash
+   docker build -f Dockerfile.sandbox -t <REGISTRY>/teams-assistant-skills:v1 .
+   docker push <REGISTRY>/teams-assistant-skills:v1
+   # Register it as a Daytona snapshot, then set DAYTONA_SNAPSHOT to its name.
+   ```
+4. **Run the server on a public HTTPS URL** so Teams can reach it. Two options:
+   - **Local dev + tunnel:** `flue dev --target node`, then expose `:3583` with a
+     [dev tunnel](https://learn.microsoft.com/azure/developer/dev-tunnels/) or
+     ngrok — fastest for iterating.
+   - **Container:** build and run the server image on any HTTPS host:
+     ```bash
+     docker build -t <REGISTRY>/flue-teams-assistant:v1 .
+     docker push <REGISTRY>/flue-teams-assistant:v1
+     ```
+   Either way set: `TEAMS_APP_ID`, `TEAMS_APP_PASSWORD`, `TEAMS_TENANT_ID`,
+   `DAYTONA_API_KEY`, `DAYTONA_SNAPSHOT`, `AWS_REGION` + AWS creds for Bedrock.
+5. **Point the bot's messaging endpoint** at
+   `https://<YOUR_HOST>/channels/teams/activities` (Azure Bot → Configuration →
+   Messaging endpoint).
+6. **Sideload the app into Teams.** Create a minimal Teams app manifest whose
+   `bot.botId` is your `TEAMS_APP_ID`, zip it with the icons, and upload via
+   Teams → Apps → *Manage your apps* → *Upload a custom app*. (Requires custom-app
+   upload to be allowed in the tenant.)
+7. **Message the bot** — DM it, or `@`-mention it in a channel. You should see the
+   reply posted back in-thread; the server log shows the dispatch and the Daytona
+   box being provisioned for that conversation.
 
-## Run locally
-
-```bash
-# Dev server (defaults to port 3583). Expose it to Teams via a tunnel.
-./node_modules/.bin/flue dev --target node
-```
-
-## Deploy the server
-
-```bash
-docker build -t <REGISTRY>/flue-teams-assistant:v1 .
-docker push <REGISTRY>/flue-teams-assistant:v1
-# Run on any container host that exposes a stable HTTPS URL.
-# Required env vars: TEAMS_APP_ID, TEAMS_APP_PASSWORD, TEAMS_TENANT_ID,
-# DAYTONA_API_KEY, DAYTONA_SNAPSHOT, AWS_REGION + AWS creds for Bedrock.
-# Point your Bot's messaging endpoint at https://<HOST>/channels/teams/activities
-```
-
-## Testing
-
-```bash
-npm test   # node:test — pure helpers (no network)
-./node_modules/.bin/tsc --noEmit
-./node_modules/.bin/flue build --target node
-```
+> **Debugging a silent bot:** a non-`200` from your endpoint is Teams telling you
+> auth failed — `401` almost always means the App ID/secret/tenant don't match
+> the registered bot; `403` means the traffic isn't coming through the Teams
+> channel. Check the server log first.
 
 ## Docs
 
