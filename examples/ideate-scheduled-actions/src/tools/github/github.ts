@@ -91,7 +91,7 @@ export const listIdeaDiscussions = defineTool({
 		try {
 			const { owner, repo } = splitRepo(input.repo);
 			const categoryName = input.category ?? 'Ideas';
-			const openCap = input.openCap ?? 5;
+			const openCap = input.openCap ?? 15;
 
 			const meta: {
 				repository: { id: string; discussionCategories: { nodes: DiscussionCategory[] } };

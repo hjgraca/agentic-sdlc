@@ -50,7 +50,7 @@ before. **Always load that memory first**, and respect it:
 
 ## Cap and output discipline
 
-- The open-idea cap is **5**. If you are at the cap, **stop immediately and open
+- The open-idea cap is **15**. If you are at the cap, **stop immediately and open
   nothing** (do this check before any expensive survey — see step 2).
 - Open **at most one** discussion per run, even when below the cap and you see
   several gaps. One best idea per hour keeps the signal high; the rest will still
@@ -61,7 +61,7 @@ before. **Always load that memory first**, and respect it:
 ## Steps
 
 1. **Load memory (cheap).** Call `github_list_idea_discussions` with
-   `repo = $GITHUB_REPOSITORY` (category defaults to "Ideas", openCap to 5). It
+   `repo = $GITHUB_REPOSITORY` (category defaults to "Ideas", openCap to 15). It
    returns `{ openCount, closedCount, atCap, open, closed }`.
 2. **Cheap-exit if capped.** If `atCap` is true, stop now and report that the
    backlog is full — do **not** survey or open anything. This keeps a capped hour
