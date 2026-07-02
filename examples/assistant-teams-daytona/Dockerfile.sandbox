@@ -1,0 +1,12 @@
+# Sandbox snapshot image. Flue discovers the agent's framing and skills from
+# the sandbox filesystem (AGENTS.md + .agents/skills/ at the work dir), so they
+# are baked here. Build, push to a registry Daytona can pull, register as a
+# snapshot, and set DAYTONA_SNAPSHOT to its name.
+FROM ubuntu:24.04
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates curl git python3 \
+  && rm -rf /var/lib/apt/lists/*
+WORKDIR /home/daytona
+COPY AGENTS.md ./AGENTS.md
+COPY .agents ./.agents
+CMD ["sleep", "infinity"]
